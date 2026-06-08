@@ -17,17 +17,36 @@ const jwt = require('jsonwebtoken');
 const { OpenAI } = require('openai');
 const fetchuser = require('./middleware/fetchuser');
 
-const app = report = express();
+const app = express();
 const server = http.createServer(app); 
 
-const io = new Server(server, { cors: { origin: "http://localhost:5173", methods: ["GET", "POST"] } });
+// ---> NAYA CHANGE: Allowed Origins Setup <---
+const allowedOrigins = [
+    "http://localhost:5173", 
+    "http://localhost:5000", 
+    "https://devsync-ai-kappa.vercel.app"
+];
+
+// ---> NAYA CHANGE: Socket.io CORS Update <---
+const io = new Server(server, { 
+    cors: { 
+        origin: allowedOrigins, 
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        credentials: true
+    } 
+});
+
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const client = new OpenAI({ baseURL: "https://models.inference.ai.azure.com", apiKey: process.env.GITHUB_TOKEN });
 
-app.use(cors());
+// ---> NEW CHANGE: Express CORS Update <---
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
 app.use(express.json());
 
 // ---------------------------------------------------------
@@ -243,8 +262,8 @@ app.post('/api/execute', fetchuser, async (req, res) => {
         let finalOutput = response.choices[0].message.content;
         
         if (finalOutput.startsWith('```')) {
-            finalOutput = finalOutput.replace(/```[a-z]*\n/g, '').replace(/```/g, '');
-        }
+    finalOutput = finalOutput.replace(/```[a-z]*\n/g, '').replace(/```/g, '');
+}
 
         res.json({ output: finalOutput.trim() || "Execution complete. No output." });
     } catch (error) { 

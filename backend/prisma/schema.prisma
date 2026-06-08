@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------
+// TABLE 1: User Identity & Authentication
+// ---------------------------------------------------------
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(DEVELOPER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships mapping
+  ownedProjects     Project[]          @relation("ProjectOwner")
+  workspaces        WorkspaceMember[]
+  interviewsHosted  InterviewRoom[]    @relation("Interviewer")
+  interviewsTaken   InterviewRoom[]    @relation("Candidate")
+}
+
+// Enumeration for Role-Based Access Control (RBAC)
+enum Role {
+  DEVELOPER
+  INTERVIEWER
+  ADMIN
+}
+
+// ---------------------------------------------------------
+// TABLE 2: Project / Workspace Core Entity
+// ---------------------------------------------------------
+model Project {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  status      String   @default("Active")
+  
+  // Relational binding to the User who created it
+  ownerId     String
+  owner       User     @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships mapping
+  members     WorkspaceMember[]
+}
+
+// ---------------------------------------------------------
+// TABLE 3: Workspace Memberships (Many-to-Many Join Table)
+// ---------------------------------------------------------
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(COLLABORATOR)
+
+  // Foreign key constraints
+  workspace   Project @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Composite primary key ensures a user cannot join the same workspace twice
+  @@id([workspaceId, userId])
+}
+
+// Enumeration for Workspace specific permissions
+enum WorkspaceRole {
+  OWNER
+  COLLABORATOR
+  VIEWER
+}
+
+// ---------------------------------------------------------
+// TABLE 4: Live Interview Environments
+// ---------------------------------------------------------
+model InterviewRoom {
+  roomId        String   @id @default(uuid())
+  title         String   @default("Technical Interview")
+  scheduledFor  DateTime?
+  isActive      Boolean  @default(false)
+  
+  // Dual-relationship mapping to the User table
+  interviewerId String
+  interviewer   User     @relation("Interviewer", fields: [interviewerId], references: [id])
+  
+  candidateId   String?
+  candidate     User?    @relation("Candidate", fields: [candidateId], references: [id])
+
+  createdAt     DateTime @default(now())
+}

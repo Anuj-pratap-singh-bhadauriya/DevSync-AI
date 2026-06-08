@@ -140,7 +140,7 @@ const Workspace = () => {
     const fetchUserProfile = async () => {
         if (!user?.name) {
             try {
-                const res = await axios.post("http://localhost:5000/api/getuser", {}, { headers: { "auth-token": token } });
+                const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/getuser", {}, { headers: { "auth-token": token } });
                 setCurrentUser(res.data);
             } catch (err) {}
         }
@@ -172,7 +172,7 @@ const Workspace = () => {
         fetchHistoricalData(); 
     }
 
-    socketRef.current = io("http://localhost:5000");
+    socketRef.current = io(import.meta.env.VITE_BACKEND_URL + "");
 
     socketRef.current.on('connect', () => {
       socketRef.current.emit('join-room', id);
@@ -321,7 +321,7 @@ const Workspace = () => {
     setExecutionLogs(prev => [...prev, `\n> Transmitting buffer to Virtual Engine...`]);
     recordActivity(`Triggered virtual execution for ${activeFile.name}`);
     try {
-      const res = await axios.post("http://localhost:5000/api/execute", { language: activeFile.language, codeBuffer: activeFile.content, customInput: customInput }, { headers: { "auth-token": token } });
+      const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/execute", { language: activeFile.language, codeBuffer: activeFile.content, customInput: customInput }, { headers: { "auth-token": token } });
       setExecutionLogs(prev => [...prev, `> [EXECUTION OUTPUT]:\n${res.data.output.trim()}`]);
     } catch (err) { setExecutionLogs(prev => [...prev, `> [CRITICAL ERROR] Virtual Execution Terminated.`]); } 
     finally { setIsRunning(false); }
@@ -333,7 +333,7 @@ const Workspace = () => {
     setCopilotLogs(prev => [...prev, `> Initiating Deep-Code AI Audit...`]);
     recordActivity("Requested AI Copilot code audit and optimization.");
     try {
-      const res = await axios.post("http://localhost:5000/api/audit", { codeBuffer: activeFile.content }, { headers: { "auth-token": token } });
+      const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/audit", { codeBuffer: activeFile.content }, { headers: { "auth-token": token } });
       setCopilotLogs(prev => [...prev, `> ${res.data.auditLog}`]);
     } catch (err) { setCopilotLogs(prev => [...prev, `> [NETWORK EXCEPTION] AI Engine unreachable.`]); } 
     finally { setIsAuditing(false); }
@@ -359,7 +359,7 @@ const Workspace = () => {
     chatHistory.push({ role: "user", content: query });
 
     try {
-      const res = await axios.post("http://localhost:5000/api/chat", { promptMessage: query, history: chatHistory, codeBuffer: activeFile.content }, { headers: { "auth-token": token } });
+      const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/chat", { promptMessage: query, history: chatHistory, codeBuffer: activeFile.content }, { headers: { "auth-token": token } });
       setCopilotLogs(prev => [...prev, `> [AI]: ${res.data.reply}`]);
     } catch (err) {} finally { setIsChatting(false); }
   };

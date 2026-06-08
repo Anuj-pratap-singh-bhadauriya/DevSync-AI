@@ -26,7 +26,7 @@ const Home = () => {
         const fetchUserProfile = async () => {
             if (!user?.email) {
                 try {
-                    const res = await axios.post("http://localhost:5000/api/getuser", {}, { headers: { "auth-token": token } });
+                    const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/getuser", {}, { headers: { "auth-token": token } });
                     setDynamicUser(res.data);
                 } catch (err) { console.error("Identity fetch failed"); }
             }
@@ -34,7 +34,7 @@ const Home = () => {
 
         const fetchProjects = async () => {
             try {
-                const response = await axios.get("http://localhost:5000/api/projects", { headers: { "auth-token": token } });
+                const response = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects", { headers: { "auth-token": token } });
                 const sortedProjects = response.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
                 setProjects(sortedProjects);
             } catch (error) {
@@ -46,7 +46,7 @@ const Home = () => {
 
         const checkNetworkHealth = async () => {
             try {
-                await axios.get("http://localhost:5000/api/ping");
+                await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/ping");
                 setNetworkStatus("Connection Secure");
             } catch (error) {
                 setNetworkStatus("Server Offline");
@@ -66,7 +66,7 @@ const Home = () => {
         if(!newWorkspaceTitle.trim()) return;
         
         try {
-            const response = await axios.post("http://localhost:5000/api/projects", {
+            const response = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/projects", {
                 title: newWorkspaceTitle,
                 description: JSON.stringify([{ name: "index.js", language: "javascript", content: "// Initialize DevSync environment...\n\nfunction executeCoreEngine() {\n  console.log('Engine Active!');\n}\n\nexecuteCoreEngine();" }])
             }, { headers: { "auth-token": token } });

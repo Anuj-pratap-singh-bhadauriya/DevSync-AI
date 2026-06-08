@@ -114,7 +114,7 @@ const Arena = () => {
                 language: "cpp", 
                 content: `// Solving Challenge: ${cleanTitle}\n#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write your optimal logic here...\n    \n    return 0;\n}` 
             }]);
-            const res = await axios.post("http://localhost:5000/api/projects", { 
+            const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/projects", { 
                 title: `Solution: ${cleanTitle}`, 
                 description: boilerplate 
             }, { headers: { "auth-token": token } });

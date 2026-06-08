@@ -83,7 +83,7 @@ const Home = () => {
         }
 
         try {
-            await axios.delete(`http://localhost:5000/api/projects/${projectId}`, { headers: { "auth-token": token } });
+           await axios.delete(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + projectId, { headers: { "auth-token": token } });
             setProjects(projects.filter(p => p.id !== projectId));
         } catch (error) {
             alert(error.response?.data?.error || "System Error: Failed to terminate workspace.");

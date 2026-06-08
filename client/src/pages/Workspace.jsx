@@ -148,7 +148,7 @@ const Workspace = () => {
 
     const fetchWorkspaceDetails = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/projects/${id}`, { headers: { "auth-token": token } });
+        const res = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id, { headers: { "auth-token": token } });
         setWorkspaceData(res.data);
         if (res.data.description && res.data.description.startsWith("[")) {
           setFiles(JSON.parse(res.data.description));
@@ -159,9 +159,9 @@ const Workspace = () => {
 
     const fetchHistoricalData = async () => {
         try {
-            const chatRes = await axios.get(`http://localhost:5000/api/projects/${id}/chats`, { headers: { "auth-token": token } });
+            const chatRes = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id + "/chats", { headers: { "auth-token": token } });
             setTeamChats(chatRes.data);
-            const logRes = await axios.get(`http://localhost:5000/api/projects/${id}/logs`, { headers: { "auth-token": token } });
+            const logRes = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id + "/logs", { headers: { "auth-token": token } });
             setActivityLogs(logRes.data);
         } catch (err) {}
     };
@@ -288,7 +288,7 @@ const Workspace = () => {
     setIsSynchronizing(true);
     setSaveStatus("Saving...");
     try { 
-        await axios.put(`http://localhost:5000/api/projects/${id}`, { 
+        await axios.put(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id, {
             title: workspaceDataRef.current?.title || "Workspace", 
             description: JSON.stringify(filesRef.current) 
         }, { headers: { "auth-token": token } }); 
@@ -393,7 +393,7 @@ const Workspace = () => {
     e.preventDefault();
     if(!inviteEmail.trim()) return;
     try {
-        await axios.post(`http://localhost:5000/api/projects/${id}/invite`, { targetEmail: inviteEmail }, { headers: { "auth-token": token } });
+        await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id + "/invite", { targetEmail: inviteEmail }, { headers: { "auth-token": token } });
         setShowInviteModal(false); setInviteEmail("");
         recordActivity(`Dispatched workspace invitation to ${inviteEmail}`);
         alert("✅ Invitation processed securely! Tell your friend to log in.");

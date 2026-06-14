@@ -16,6 +16,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { OpenAI } = require('openai');
 const fetchuser = require('./middleware/fetchuser');
+const { sendOTP } = require('./emailService');
 
 const app = express();
 const server = http.createServer(app); 
@@ -39,6 +40,22 @@ const io = new Server(server, {
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
+
+// ---------------------------------------------------------
+// OTP STORE (In-Memory with 5-minute expiry)
+// ---------------------------------------------------------
+const otpStore = new Map(); // key: email, value: { otp, name, password, expiresAt }
+
+const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+const cleanupExpiredOTPs = () => {
+    const now = Date.now();
+    for (const [email, data] of otpStore.entries()) {
+        if (now > data.expiresAt) otpStore.delete(email);
+    }
+};
+// Auto-cleanup every 2 minutes
+setInterval(cleanupExpiredOTPs, 2 * 60 * 1000);
 
 const client = new OpenAI({ baseURL: "https://models.inference.ai.azure.com", apiKey: process.env.GITHUB_TOKEN });
 
@@ -111,14 +128,101 @@ io.on('connection', (socket) => {
 // ---------------------------------------------------------
 app.get('/api/ping', (req, res) => res.json({ status: "Secure", timestamp: new Date() }));
 
-app.post('/api/signup', async (req, res) => {
+// --- STEP 1: Send OTP to email ---
+app.post('/api/send-otp', async (req, res) => {
     try {
         const { name, email, password } = req.body;
-        if (await prisma.user.findUnique({ where: { email } })) return res.status(400).json({ error: "Email exists." });
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await prisma.user.create({ data: { name, email, password: hashedPassword } });
-        res.status(201).json({ message: "Success." });
-    } catch (error) { res.status(500).json({ error: "Server error." }); }
+
+        // Validate required fields
+        if (!name || !email || !password) {
+            return res.status(400).json({ error: "All fields are required." });
+        }
+
+        // Validate email format (must be a real domain pattern)
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|yahoo\.com|outlook\.com|hotmail\.com|protonmail\.com|icloud\.com|mail\.com|zoho\.com|aol\.com|yandex\.com)$/i;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ error: "Please enter a valid email address (Gmail, Yahoo, Outlook, etc.)" });
+        }
+
+        // Check if email already registered
+        if (await prisma.user.findUnique({ where: { email } })) {
+            return res.status(400).json({ error: "This email is already registered. Please login instead." });
+        }
+
+        // Generate OTP and store temporarily
+        const otp = generateOTP();
+        const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+
+        otpStore.set(email, {
+            otp,
+            name,
+            password,
+            expiresAt: Date.now() + OTP_EXPIRY_MS
+        });
+
+        // Send OTP via email
+        const sent = await sendOTP(email, otp);
+        if (!sent) {
+            otpStore.delete(email);
+            return res.status(500).json({ error: "Failed to send OTP. Please check your email and try again." });
+        }
+
+        console.log(`📧 OTP sent to ${email}`);
+        res.json({ message: "OTP sent successfully! Check your email." });
+
+    } catch (error) {
+        console.error("Send OTP Error:", error);
+        res.status(500).json({ error: "Server error. Please try again." });
+    }
+});
+
+// --- STEP 2: Verify OTP and create account ---
+app.post('/api/verify-otp', async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            return res.status(400).json({ error: "Email and OTP are required." });
+        }
+
+        const storedData = otpStore.get(email);
+
+        // Check if OTP exists
+        if (!storedData) {
+            return res.status(400).json({ error: "No OTP found. Please request a new one." });
+        }
+
+        // Check if OTP expired
+        if (Date.now() > storedData.expiresAt) {
+            otpStore.delete(email);
+            return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+        }
+
+        // Verify OTP
+        if (storedData.otp !== otp) {
+            return res.status(400).json({ error: "Invalid OTP. Please try again." });
+        }
+
+        // OTP verified! Create the user account
+        const hashedPassword = await bcrypt.hash(storedData.password, 10);
+        await prisma.user.create({
+            data: {
+                name: storedData.name,
+                email: email,
+                password: hashedPassword
+            }
+        });
+
+        // Cleanup OTP from store
+        otpStore.delete(email);
+
+        console.log(`✅ Account created for ${email} (OTP verified)`);
+        res.status(201).json({ message: "Email verified & account created successfully!" });
+
+    } catch (error) {
+        console.error("Verify OTP Error:", error);
+        res.status(500).json({ error: "Server error. Please try again." });
+    }
 });
 
 app.post('/api/login', async (req, res) => {

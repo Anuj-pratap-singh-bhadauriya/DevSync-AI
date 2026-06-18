@@ -138,10 +138,10 @@ app.post('/api/send-otp', async (req, res) => {
             return res.status(400).json({ error: "All fields are required." });
         }
 
-        // Validate email format (must be a real domain pattern)
-        const emailRegex = /^[a-zA-Z0-9._%+-]+@(gmail\.com|yahoo\.com|outlook\.com|hotmail\.com|protonmail\.com|icloud\.com|mail\.com|zoho\.com|aol\.com|yandex\.com)$/i;
+        // Validate email format (basic format check — actual delivery is verified by SMTP)
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         if (!emailRegex.test(email)) {
-            return res.status(400).json({ error: "Please enter a valid email address (Gmail, Yahoo, Outlook, etc.)" });
+            return res.status(400).json({ error: "Please enter a valid email address." });
         }
 
         // Check if email already registered
@@ -161,10 +161,10 @@ app.post('/api/send-otp', async (req, res) => {
         });
 
         // Send OTP via email
-        const sent = await sendOTP(email, otp);
-        if (!sent) {
+        const emailResult = await sendOTP(email, otp);
+        if (!emailResult.success) {
             otpStore.delete(email);
-            return res.status(500).json({ error: "Failed to send OTP. Please check your email and try again." });
+            return res.status(400).json({ error: emailResult.message });
         }
 
         console.log(`📧 OTP sent to ${email}`);

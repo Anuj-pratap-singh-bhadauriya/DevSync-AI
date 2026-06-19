@@ -154,7 +154,7 @@ const Workspace = () => {
           setFiles(JSON.parse(res.data.description));
           setActiveFileName(JSON.parse(res.data.description)[0]?.name || "index.js");
         }
-      } catch (err) { navigate("/"); } finally { setIsLoading(false); }
+      } catch (err) { navigate("/dashboard"); } finally { setIsLoading(false); }
     };
 
     const fetchHistoricalData = async () => {
@@ -449,7 +449,7 @@ const Workspace = () => {
           <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className={`p-2 rounded-full border shadow-sm w-9 h-9 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-yellow-400' : 'bg-gray-100 border-gray-300 text-gray-700'}`}>{theme === "dark" ? "☀️" : "🌙"}</button>
           <button onClick={handleRunCode} disabled={isRunning || (isInterviewMode && remainingTime === 0)} className={`px-4 py-2 rounded-lg font-bold text-sm shadow-sm ${(isRunning || (isInterviewMode && remainingTime === 0)) ? "bg-green-900 text-green-300 border-green-800 cursor-not-allowed" : "bg-green-600 text-white border-green-500 hover:bg-green-500"}`}>▶ Run Code</button>
           <button onClick={handlePersistConfiguration} disabled={isSynchronizing} className={`px-4 py-2 rounded-lg font-medium text-sm border shadow-sm transition-colors ${saveStatus.includes("Saved") ? "bg-green-600 border-green-500 text-white" : "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"}`}>{saveStatus}</button>
-          <button onClick={() => navigate("/")} className={`px-4 py-2 rounded-lg font-medium text-sm border shadow-sm ${theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-700 border-gray-300'}`}>Dashboard</button>
+          <button onClick={() => navigate("/dashboard")} className={`px-4 py-2 rounded-lg font-medium text-sm border shadow-sm ${theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-700 border-gray-300'}`}>Dashboard</button>
         </div>
       </header>
 

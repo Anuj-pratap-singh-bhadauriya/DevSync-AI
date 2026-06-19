@@ -161,7 +161,7 @@ const Arena = () => {
                     </div>
                     <p className="text-xs text-gray-500 font-mono mt-1">Select a challenge to automatically provision a secure sandbox.</p>
                 </div>
-                <button onClick={() => navigate("/")} className="px-4 py-2 border border-blue-900/50 hover:bg-blue-950/30 text-blue-400 text-xs font-bold font-mono rounded-lg transition-all shadow-sm">
+                <button onClick={() => navigate("/dashboard")} className="px-4 py-2 border border-blue-900/50 hover:bg-blue-950/30 text-blue-400 text-xs font-bold font-mono rounded-lg transition-all shadow-sm">
                     ← Back to Dashboard
                 </button>
             </header>

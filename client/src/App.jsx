@@ -5,15 +5,19 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Workspace from './pages/Workspace';
 import Profile from './pages/Profile';
+import LandingPage from './pages/LandingPage';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
     <Router>
       <Routes>
+        {/* Public Landing Page */}
+        <Route path="/" element={<LandingPage />} />
+        
         {/* Core Application Routes protected by Authentication Middleware */}
         <Route 
-          path="/" 
+          path="/dashboard" 
           element={
             <ProtectedRoute>
               <Home />

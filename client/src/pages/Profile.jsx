@@ -32,7 +32,7 @@ const Profile = () => {
             <p className="text-gray-400 mt-1">Manage your identity and authentication parameters.</p>
           </div>
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             className="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded-lg font-medium transition-colors border border-gray-650 shadow-sm"
           >
             Return to Dashboard

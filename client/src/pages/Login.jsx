@@ -6,6 +6,8 @@ import { loginSuccess } from '../redux/authSlice'; // 2. Naya Import
 
 const Login = () => {
   const [credentials, setCredentials] = useState({ email: "", password: "" });
+  const [message, setMessage] = useState({ text: "", type: "" });
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const dispatch = useDispatch(); // 3. Hook initialized here
 
@@ -15,6 +17,8 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
+    setMessage({ text: "", type: "" });
     
     try {
       const response = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/login", {
@@ -25,12 +29,17 @@ const Login = () => {
       // Dispatching token to Redux Store with the correct payload key
       dispatch(loginSuccess({ token: response.data.token }));
 
-      alert("Authentication successful! Redirecting to workspace..."); 
-      navigate("/");
+      setMessage({ text: "Authentication successful! Redirecting...", type: "success" });
+      setTimeout(() => navigate("/dashboard"), 1000);
 
     } catch (error) {
       console.error("Login Error:", error.response?.data);
-      alert(error.response?.data?.error || "Invalid credentials. Please try again."); 
+      setMessage({ 
+        text: error.response?.data?.error || "Invalid credentials. Please try again.", 
+        type: "error" 
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -41,6 +50,13 @@ const Login = () => {
           <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
           <p className="text-gray-400">Log in to your DevSync AI account.</p>
         </div>
+
+        {message.text && (
+          <div className={`p-4 rounded-lg mb-6 text-sm font-medium border ${message.type === 'error' ? 'bg-red-900/30 text-red-400 border-red-800' : 'bg-green-900/30 text-green-400 border-green-800'}`}>
+            {message.type === 'error' ? '❌ ' : '✅ '}
+            {message.text}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>

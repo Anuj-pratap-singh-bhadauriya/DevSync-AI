@@ -19,7 +19,7 @@ const Home = () => {
     // Initial Data Sync, Profile Fallback & Network Ping
     useEffect(() => {
         if (!token) {
-            navigate('/login');
+            navigate('/');
             return;
         }
 

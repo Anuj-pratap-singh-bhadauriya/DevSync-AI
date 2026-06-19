@@ -7,7 +7,7 @@ const ProtectedRoute = ({ children }) => {
 
   // Redirecting unauthenticated users to the login portal
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // Rendering the requested component if authentication is valid

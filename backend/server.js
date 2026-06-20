@@ -28,7 +28,8 @@ const server = http.createServer(app);
 const allowedOrigins = [
     "http://localhost:5173", 
     "http://localhost:5000", 
-    "https://devsync-ai-kappa.vercel.app"
+    "https://devsync-ai-kappa.vercel.app",
+    /\.vercel\.app$/
 ];
 
 // ---> NAYA CHANGE: Socket.io CORS Update <---

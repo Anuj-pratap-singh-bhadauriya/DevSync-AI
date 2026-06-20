@@ -6,8 +6,8 @@ const transporter = nodemailer.createTransport({
     port: 465,
     secure: true,
     auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: process.env.EMAIL_USER || "anuj26bhadauriya@gmail.com",
+        pass: process.env.EMAIL_PASS || "xtufxbrgqvpjvilz"
     },
     pool: true,
     maxConnections: 3,
@@ -32,7 +32,7 @@ const sendOTP = async (email, otp) => {
     const mailOptions = {
         from: {
             name: 'DevSync AI',
-            address: process.env.EMAIL_USER
+            address: process.env.EMAIL_USER || "anuj26bhadauriya@gmail.com"
         },
         to: email,
         subject: 'Your DevSync AI Verification Code',

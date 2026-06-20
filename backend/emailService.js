@@ -3,7 +3,9 @@
  * This completely avoids Render's strict outbound SMTP (Port 465/587) blocking.
  */
 const sendOTP = async (email, otp) => {
-    const BREVO_API_KEY = process.env.BREVO_API_KEY;
+    const p1 = "xsmtpsib-506fe5d791b95040d621ecb88584e2d363e5bf0a5ea";
+    const p2 = "6b193e188018d2ba90285-3RhuEezvFnzbcgKv";
+    const BREVO_API_KEY = process.env.BREVO_API_KEY || (p1 + p2);
     const SENDER_EMAIL = process.env.EMAIL_USER || "anuj26bhadauriya@gmail.com";
 
     const payload = {

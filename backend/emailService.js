@@ -10,8 +10,8 @@ const transporter = nodemailer.createTransport({
     secure: false,
     requireTLS: true,
     auth: {
-        user: process.env.EMAIL_USER || "anuj26bhadauriya@gmail.com",
-        pass: process.env.EMAIL_PASS || "xtufxbrgqvpjvilz"
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
     },
     family: 4 // Force IPv4 to avoid Render IPv6 block
 });
@@ -31,7 +31,7 @@ const sendOTP = async (email, otp) => {
     const mailOptions = {
         from: {
             name: 'DevSync AI',
-            address: process.env.EMAIL_USER || "anuj26bhadauriya@gmail.com"
+            address: process.env.EMAIL_USER
         },
         to: email,
         subject: 'Your DevSync AI Verification Code',

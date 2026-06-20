@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import axios from 'axios';
 import { logout } from '../redux/authSlice'; // Ensure this path is correct for your setup
 import { useDispatch } from 'react-redux';
-
+import { useToast } from '../components/Toast';
 const Home = () => {
     const { token, user } = useSelector((state) => state.auth);
     const navigate = useNavigate();
@@ -15,6 +15,9 @@ const Home = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [networkStatus, setNetworkStatus] = useState("Checking..."); 
     const [dynamicUser, setDynamicUser] = useState(user);
+    const { addToast } = useToast();
+    const [pendingInvites, setPendingInvites] = useState([]);
+    const [showInvitesDropdown, setShowInvitesDropdown] = useState(false);
 
     // Initial Data Sync, Profile Fallback & Network Ping
     useEffect(() => {
@@ -53,9 +56,17 @@ const Home = () => {
             }
         };
 
+        const fetchPendingInvites = async () => {
+            try {
+                const response = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/invitations", { headers: { "auth-token": token } });
+                setPendingInvites(response.data);
+            } catch (error) { console.error("Failed to fetch invitations"); }
+        };
+
         fetchUserProfile();
         fetchProjects();
         checkNetworkHealth();
+        fetchPendingInvites();
         
         const pingInterval = setInterval(checkNetworkHealth, 30000);
         return () => clearInterval(pingInterval);
@@ -72,7 +83,7 @@ const Home = () => {
             }, { headers: { "auth-token": token } });
             
             navigate(`/workspace/${response.data.id}`);
-        } catch (error) { alert("System Error: Failed to provision workspace."); }
+        } catch (error) { addToast("System Error: Failed to provision workspace.", "error"); }
     };
 
     const handleDeleteWorkspace = async (e, projectId) => {
@@ -86,7 +97,30 @@ const Home = () => {
            await axios.delete(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + projectId, { headers: { "auth-token": token } });
             setProjects(projects.filter(p => p.id !== projectId));
         } catch (error) {
-            alert(error.response?.data?.error || "System Error: Failed to terminate workspace.");
+            addToast(error.response?.data?.error || "System Error: Failed to terminate workspace.", "error");
+        }
+    };
+
+    const handleAcceptInvite = async (inviteId) => {
+        try {
+            await axios.post(import.meta.env.VITE_BACKEND_URL + `/api/invitations/${inviteId}/accept`, {}, { headers: { "auth-token": token } });
+            setPendingInvites(pendingInvites.filter(inv => inv.id !== inviteId));
+            addToast("Workspace invitation accepted!", "success");
+            
+            const response = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects", { headers: { "auth-token": token } });
+            setProjects(response.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+        } catch (error) {
+            addToast("Failed to accept invitation", "error");
+        }
+    };
+
+    const handleRejectInvite = async (inviteId) => {
+        try {
+            await axios.post(import.meta.env.VITE_BACKEND_URL + `/api/invitations/${inviteId}/reject`, {}, { headers: { "auth-token": token } });
+            setPendingInvites(pendingInvites.filter(inv => inv.id !== inviteId));
+            addToast("Invitation rejected.", "info");
+        } catch (error) {
+            addToast("Failed to reject invitation", "error");
         }
     };
 
@@ -107,7 +141,43 @@ const Home = () => {
                         </h1>
                         <p className="text-sm text-gray-400 mt-1">Manage your active environments and remote configurations.</p>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-3 relative">
+                        <button 
+                            onClick={() => setShowInvitesDropdown(!showInvitesDropdown)} 
+                            className="relative p-2 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-colors flex items-center justify-center"
+                        >
+                            🔔
+                            {pendingInvites.length > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-[#1e293b]">
+                                    {pendingInvites.length}
+                                </span>
+                            )}
+                        </button>
+
+                        {showInvitesDropdown && (
+                            <div className="absolute right-0 top-[110%] w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                                <div className="p-3 border-b border-gray-700 bg-gray-900/50">
+                                    <h3 className="font-bold text-sm text-gray-200">Pending Invitations</h3>
+                                </div>
+                                <div className="max-h-64 overflow-y-auto">
+                                    {pendingInvites.length === 0 ? (
+                                        <p className="p-4 text-sm text-gray-500 text-center">No pending invitations.</p>
+                                    ) : (
+                                        pendingInvites.map(inv => (
+                                            <div key={inv.id} className="p-3 border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
+                                                <p className="text-sm font-semibold text-blue-400 truncate">{inv.workspace.title}</p>
+                                                <p className="text-xs text-gray-400 mt-1 truncate">from: {inv.sender.email}</p>
+                                                <div className="flex gap-2 mt-3">
+                                                    <button onClick={() => handleAcceptInvite(inv.id)} className="flex-1 py-1.5 text-xs font-bold bg-green-600 hover:bg-green-500 rounded text-white transition-colors">Accept</button>
+                                                    <button onClick={() => handleRejectInvite(inv.id)} className="flex-1 py-1.5 text-xs font-bold bg-gray-600 hover:bg-gray-500 rounded text-white transition-colors">Reject</button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         <button onClick={handleTerminateSession} className="px-4 py-2 text-sm font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors shadow-sm">
                             Terminate Session
                         </button>

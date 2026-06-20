@@ -46,6 +46,9 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // ---------------------------------------------------------
 const otpStore = new Map(); // key: email, value: { otp, name, password, expiresAt }
 
+// Track connected users per room for video calls
+const roomUsers = new Map(); // roomId → Set of { socketId, email }
+
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 const cleanupExpiredOTPs = () => {
@@ -82,8 +85,17 @@ connectMongoDB();
 // REAL-TIME COLLABORATION HUB (SOCKET.IO)
 // ---------------------------------------------------------
 io.on('connection', (socket) => {
-    socket.on('join-room', (roomId) => {
+    socket.on('join-room', (roomId, userEmail) => {
         socket.join(roomId);
+        socket.roomId = roomId;
+        socket.userEmail = userEmail || 'Anonymous';
+
+        // Track user in room
+        if (!roomUsers.has(roomId)) roomUsers.set(roomId, new Set());
+        roomUsers.get(roomId).add({ socketId: socket.id, email: socket.userEmail });
+
+        // Broadcast updated user list
+        io.to(roomId).emit('room-users-update', Array.from(roomUsers.get(roomId)));
         socket.to(roomId).emit('user-joined', { message: `A new collaborator has entered the workspace.` });
     });
 
@@ -121,6 +133,48 @@ io.on('connection', (socket) => {
     });
 
     socket.on('end-interview', ({ roomId }) => { io.to(roomId).emit('interview-ended'); });
+
+    // --- WebRTC Video Call Signaling ---
+    socket.on('join-call', ({ roomId }) => {
+        socket.to(roomId).emit('call-user-joined', { socketId: socket.id, email: socket.userEmail });
+    });
+
+    socket.on('leave-call', ({ roomId }) => {
+        socket.to(roomId).emit('call-user-left', { socketId: socket.id, email: socket.userEmail });
+    });
+
+    socket.on('webrtc-offer', ({ targetSocketId, offer }) => {
+        io.to(targetSocketId).emit('webrtc-offer', { senderSocketId: socket.id, offer });
+    });
+
+    socket.on('webrtc-answer', ({ targetSocketId, answer }) => {
+        io.to(targetSocketId).emit('webrtc-answer', { senderSocketId: socket.id, answer });
+    });
+
+    socket.on('webrtc-ice-candidate', ({ targetSocketId, candidate }) => {
+        io.to(targetSocketId).emit('webrtc-ice-candidate', { senderSocketId: socket.id, candidate });
+    });
+
+    // --- Disconnect Handler ---
+    socket.on('disconnect', () => {
+        const roomId = socket.roomId;
+        if (roomId && roomUsers.has(roomId)) {
+            const users = roomUsers.get(roomId);
+            for (const user of users) {
+                if (user.socketId === socket.id) {
+                    users.delete(user);
+                    break;
+                }
+            }
+            if (users.size === 0) {
+                roomUsers.delete(roomId);
+            } else {
+                io.to(roomId).emit('room-users-update', Array.from(users));
+            }
+            // Notify others that this user left the call (if they were in one)
+            socket.to(roomId).emit('call-user-left', { socketId: socket.id, email: socket.userEmail });
+        }
+    });
 });
 
 // ---------------------------------------------------------
@@ -280,8 +334,90 @@ app.delete('/api/projects/:id', fetchuser, async (req, res) => {
 app.post('/api/projects/:id/invite', fetchuser, async (req, res) => {
     try {
         const targetUser = await prisma.user.findUnique({ where: { email: req.body.targetEmail } });
-        if (!targetUser) return res.status(404).json({ error: "User not found." });
-        res.status(201).json(await prisma.workspaceMember.create({ data: { workspaceId: req.params.id, userId: targetUser.id, role: 'COLLABORATOR' } }));
+        if (!targetUser) return res.status(404).json({ error: "User not found. They must have a DevSync account first." });
+        if (targetUser.id === req.user.userId) return res.status(400).json({ error: "You cannot invite yourself." });
+
+        // Check if already a member
+        const existingMember = await prisma.workspaceMember.findUnique({
+            where: { workspaceId_userId: { workspaceId: req.params.id, userId: targetUser.id } }
+        });
+        if (existingMember) return res.status(400).json({ error: "User is already a member of this workspace." });
+
+        // Check if invitation already pending
+        const existingInvite = await prisma.invitation.findUnique({
+            where: { workspaceId_receiverId: { workspaceId: req.params.id, receiverId: targetUser.id } }
+        });
+        if (existingInvite && existingInvite.status === 'PENDING') return res.status(400).json({ error: "Invitation already sent to this user." });
+
+        // Delete old rejected invitation if exists, then create new
+        if (existingInvite) await prisma.invitation.delete({ where: { id: existingInvite.id } });
+
+        const invitation = await prisma.invitation.create({
+            data: {
+                workspaceId: req.params.id,
+                senderId: req.user.userId,
+                receiverId: targetUser.id
+            },
+            include: { workspace: { select: { title: true } }, sender: { select: { name: true, email: true } } }
+        });
+
+        // Real-time notification via Socket.IO
+        const roomUsers = io.sockets.sockets;
+        for (const [, s] of roomUsers) {
+            if (s.userEmail === targetUser.email) {
+                s.emit('new-invitation', invitation);
+            }
+        }
+
+        res.status(201).json({ message: "Invitation sent! Waiting for them to accept." });
+    } catch (error) {
+        console.error('Invite error:', error);
+        res.status(500).json({ error: "Server error." });
+    }
+});
+
+// --- Get pending invitations for logged-in user ---
+app.get('/api/invitations', fetchuser, async (req, res) => {
+    try {
+        const invitations = await prisma.invitation.findMany({
+            where: { receiverId: req.user.userId, status: 'PENDING' },
+            include: {
+                workspace: { select: { id: true, title: true } },
+                sender: { select: { name: true, email: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(invitations);
+    } catch (error) { res.status(500).json({ error: "Server error." }); }
+});
+
+// --- Accept an invitation ---
+app.post('/api/invitations/:id/accept', fetchuser, async (req, res) => {
+    try {
+        const invitation = await prisma.invitation.findUnique({ where: { id: req.params.id } });
+        if (!invitation || invitation.receiverId !== req.user.userId) return res.status(404).json({ error: "Invitation not found." });
+        if (invitation.status !== 'PENDING') return res.status(400).json({ error: "Invitation already processed." });
+
+        // Add as workspace member
+        await prisma.workspaceMember.create({
+            data: { workspaceId: invitation.workspaceId, userId: req.user.userId, role: 'COLLABORATOR' }
+        });
+
+        // Update invitation status
+        await prisma.invitation.update({ where: { id: req.params.id }, data: { status: 'ACCEPTED' } });
+
+        res.json({ message: "Invitation accepted! Workspace added to your dashboard." });
+    } catch (error) { res.status(500).json({ error: "Server error." }); }
+});
+
+// --- Reject an invitation ---
+app.post('/api/invitations/:id/reject', fetchuser, async (req, res) => {
+    try {
+        const invitation = await prisma.invitation.findUnique({ where: { id: req.params.id } });
+        if (!invitation || invitation.receiverId !== req.user.userId) return res.status(404).json({ error: "Invitation not found." });
+
+        await prisma.invitation.update({ where: { id: req.params.id }, data: { status: 'REJECTED' } });
+        res.json({ message: "Invitation rejected." });
     } catch (error) { res.status(500).json({ error: "Server error." }); }
 });
 

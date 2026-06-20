@@ -5,10 +5,15 @@ import axios from 'axios';
 import Editor from '@monaco-editor/react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { io } from 'socket.io-client';
+import { useToast } from '../components/Toast';
+import VideoCall from '../components/VideoCall';
 
 const Workspace = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { addToast } = useToast();
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [socketInstance, setSocketInstance] = useState(null);
   
   const { token, user } = useSelector((state) => state.auth);
   const [currentUser, setCurrentUser] = useState(user);
@@ -20,6 +25,7 @@ const Workspace = () => {
   
   const [theme, setTheme] = useState("dark");
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showVideoCall, setShowVideoCall] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
 
   const [files, setFiles] = useState([{ name: "index.js", language: "javascript", content: "// Initialize enterprise workspace...\n" }]);
@@ -82,7 +88,7 @@ const Workspace = () => {
                 setRemainingTime(0); setIsInterviewMode(false); setInterviewEndTime(null);
                 setCopilotLogs(prev => [...prev, "> System: Interview session elapsed. Auto-terminating."]);
                 recordActivity("System automatically terminated the interview session.");
-                alert("⏳ Interview time is strictly up! Code execution has been halted.");
+                addToast("⏳ Interview time is strictly up! Code execution has been halted.", "error");
             } else {
                 setRemainingTime(Math.floor(distance / 1000));
             }
@@ -163,7 +169,9 @@ const Workspace = () => {
             setTeamChats(chatRes.data);
             const logRes = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id + "/logs", { headers: { "auth-token": token } });
             setActivityLogs(logRes.data);
-        } catch (err) {}
+        } catch (error) {
+            console.error("Failed to fetch historical data", error);
+        }
     };
 
     if (token) { 
@@ -172,10 +180,17 @@ const Workspace = () => {
         fetchHistoricalData(); 
     }
 
-    socketRef.current = io(import.meta.env.VITE_BACKEND_URL + "");
+    const newSocket = io(import.meta.env.VITE_BACKEND_URL + "");
+    socketRef.current = newSocket;
+    setSocketInstance(newSocket);
 
     socketRef.current.on('connect', () => {
-      socketRef.current.emit('join-room', id);
+      const effectiveEmail = user?.email || currentUser?.email || 'anonymous';
+      socketRef.current.emit('join-room', id, effectiveEmail);
+    });
+
+    socketRef.current.on('room-users-update', (users) => {
+      setOnlineUsers(users);
     });
 
     socketRef.current.on('user-joined', (data) => {
@@ -258,7 +273,7 @@ const Workspace = () => {
   const handleCreateFile = (e) => {
     e.preventDefault();
     if (!newFileNameInput.trim()) return;
-    if (files.some(f => f.name.toLowerCase() === newFileNameInput.toLowerCase())) return alert("File conflicts with existing architecture.");
+    if (files.some(f => f.name.toLowerCase() === newFileNameInput.toLowerCase())) return addToast("File conflicts with existing architecture.", "error");
     
     const newFiles = [...files, { name: newFileNameInput, language: newFileLanguage, content: getLanguageTemplate(newFileLanguage) }];
     setFiles(newFiles);
@@ -271,7 +286,7 @@ const Workspace = () => {
 
   const handleDeleteFile = (fileNameToDelete, e) => {
     e.stopPropagation(); 
-    if (files.length <= 1) return alert("System requires at least one active buffer.");
+    if (files.length <= 1) return addToast("System requires at least one active buffer.", "error");
     
     const updatedFiles = files.filter(f => f.name !== fileNameToDelete);
     const nextActive = activeFileName === fileNameToDelete ? updatedFiles[0].name : activeFileName;
@@ -396,9 +411,9 @@ const Workspace = () => {
         await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id + "/invite", { targetEmail: inviteEmail }, { headers: { "auth-token": token } });
         setShowInviteModal(false); setInviteEmail("");
         recordActivity(`Dispatched workspace invitation to ${inviteEmail}`);
-        alert("✅ Invitation processed securely! Tell your friend to log in.");
+        addToast("✅ Invitation sent! Waiting for them to accept.", "success");
     } catch (err) { 
-        alert("❌ Error: Authorization failed. Make sure the user has created an account on DevSync first!"); 
+        addToast(err.response?.data?.error || "Error: Failed to send invitation.", "error"); 
     }
   };
 
@@ -433,12 +448,30 @@ const Workspace = () => {
               {isInterviewMode ? `LIVE INTERVIEW: ${formatTime(remainingTime)}` : "Active Chamber"}
             </span>
             <span className={`font-mono text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>UID: {id.split('-')[0]}...</span>
+
+            {/* ONLINE USERS INDICATOR */}
+            <div className="flex items-center ml-2">
+                {onlineUsers.slice(0, 3).map((ou, i) => (
+                    <div key={ou.socketId || i} className="w-6 h-6 rounded-full bg-green-600 border-2 border-gray-900 flex items-center justify-center text-[10px] font-bold text-white shadow-sm -ml-2 first:ml-0 relative group" title={ou.email}>
+                        {(ou.email || '?').charAt(0).toUpperCase()}
+                        <div className="absolute w-2 h-2 bg-green-400 rounded-full bottom-0 right-0 border border-gray-900"></div>
+                    </div>
+                ))}
+                {onlineUsers.length > 3 && (
+                    <div className="w-6 h-6 rounded-full bg-gray-700 border-2 border-gray-900 flex items-center justify-center text-[10px] font-bold text-white shadow-sm -ml-2 z-10">
+                        +{onlineUsers.length - 3}
+                    </div>
+                )}
+                {onlineUsers.length > 0 && <span className="text-xs text-gray-500 ml-2 font-medium">{onlineUsers.length} online</span>}
+            </div>
           </div>
           <h1 className="text-xl font-bold mt-1 tracking-tight">{workspaceData ? workspaceData.title : "Unidentified Workspace"}</h1>
         </div>
         
         <div className="flex items-center gap-3">
           <button onClick={() => setShowInviteModal(true)} className={`px-4 py-2 rounded-lg font-medium text-sm border shadow-sm ${theme === 'dark' ? 'bg-purple-900/50 text-purple-300 border-purple-800' : 'bg-purple-100 text-purple-700 border-purple-300'}`}>👥 Invite</button>
+          
+          <button onClick={() => setShowVideoCall(!showVideoCall)} className={`px-4 py-2 rounded-lg font-bold text-sm border shadow-sm transition-colors ${showVideoCall ? 'bg-red-600 text-white border-red-500 hover:bg-red-700' : (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-300 border-emerald-800 hover:bg-emerald-900/70' : 'bg-emerald-100 text-emerald-700 border-emerald-300')}`}>{showVideoCall ? '📞 End Call' : '📹 Start Call'}</button>
           
           {!isInterviewMode ? (
               <button onClick={handleStartInterview} className={`px-4 py-2 rounded-lg font-bold text-sm border shadow-sm ${theme === 'dark' ? 'bg-red-900/50 text-red-300 border-red-800' : 'bg-red-100 text-red-700 border-red-300'}`}>🎤 Start 45m Interview</button>
@@ -663,8 +696,33 @@ const Workspace = () => {
                         <button type="submit" className="px-4 py-2 text-sm font-bold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors">Dispatch Invite</button>
                     </div>
                 </form>
+                <div className="mt-4 flex items-center gap-2">
+                    <div className="flex-1 h-px bg-gray-700"></div>
+                    <span className="text-xs text-gray-500 uppercase tracking-wider font-bold">OR</span>
+                    <div className="flex-1 h-px bg-gray-700"></div>
+                </div>
+                <button 
+                    type="button"
+                    onClick={() => {
+                        navigator.clipboard.writeText(window.location.href);
+                        addToast("Workspace link copied to clipboard!", "success");
+                    }} 
+                    className={`mt-4 w-full py-2 flex items-center justify-center gap-2 text-sm font-bold rounded border transition-colors ${theme === 'dark' ? 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-300' : 'bg-gray-100 border-gray-300 hover:bg-gray-200 text-gray-700'}`}
+                >
+                    📋 Copy Workspace Link
+                </button>
             </div>
         </div>
+      )}
+
+      {/* Video Call Floating Panel */}
+      {showVideoCall && socketInstance && (
+        <VideoCall
+          socket={socketInstance}
+          roomId={id}
+          userEmail={currentUser?.email || user?.email || 'anonymous'}
+          onClose={() => setShowVideoCall(false)}
+        />
       )}
     </div>
   );

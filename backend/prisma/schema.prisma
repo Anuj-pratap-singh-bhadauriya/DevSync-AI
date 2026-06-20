@@ -28,6 +28,8 @@ model User {
   workspaces        WorkspaceMember[]
   interviewsHosted  InterviewRoom[]    @relation("Interviewer")
   interviewsTaken   InterviewRoom[]    @relation("Candidate")
+  sentInvitations     Invitation[]       @relation("SentInvitations")
+  receivedInvitations Invitation[]       @relation("ReceivedInvitations")
 }
 
 // Enumeration for Role-Based Access Control (RBAC)
@@ -55,6 +57,7 @@ model Project {
 
   // Relationships mapping
   members     WorkspaceMember[]
+  invitations Invitation[]
 }
 
 // ---------------------------------------------------------
@@ -97,4 +100,28 @@ model InterviewRoom {
   candidate     User?    @relation("Candidate", fields: [candidateId], references: [id])
 
   createdAt     DateTime @default(now())
+}
+
+// ---------------------------------------------------------
+// TABLE 5: Workspace Invitations (Accept/Reject System)
+// ---------------------------------------------------------
+model Invitation {
+  id          String           @id @default(uuid())
+  workspaceId String
+  workspace   Project          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  senderId    String
+  sender      User             @relation("SentInvitations", fields: [senderId], references: [id])
+  receiverId  String
+  receiver    User             @relation("ReceivedInvitations", fields: [receiverId], references: [id])
+  status      InvitationStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+
+  // Ensure a user can only be invited to the same workspace once
+  @@unique([workspaceId, receiverId])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
 }

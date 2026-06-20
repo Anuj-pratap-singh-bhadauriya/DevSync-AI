@@ -8,13 +8,7 @@ const transporter = nodemailer.createTransport({
     auth: {
         user: process.env.EMAIL_USER || "anuj26bhadauriya@gmail.com",
         pass: process.env.EMAIL_PASS || "xtufxbrgqvpjvilz"
-    },
-    pool: true,
-    maxConnections: 3,
-    maxMessages: 10,
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    }
 });
 
 // Verify transporter on startup

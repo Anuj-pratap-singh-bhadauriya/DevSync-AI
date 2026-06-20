@@ -22,6 +22,7 @@ const rateLimit = require('express-rate-limit');
 const checkMembership = require('./middleware/checkMembership');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app); 
 
 // ---> NAYA CHANGE: Allowed Origins Setup <---

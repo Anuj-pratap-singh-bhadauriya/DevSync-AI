@@ -8,7 +8,8 @@ const transporter = nodemailer.createTransport({
     auth: {
         user: process.env.EMAIL_USER || "anuj26bhadauriya@gmail.com",
         pass: process.env.EMAIL_PASS || "xtufxbrgqvpjvilz"
-    }
+    },
+    family: 4 // Force IPv4 to avoid Render IPv6 block
 });
 
 // Verify transporter on startup

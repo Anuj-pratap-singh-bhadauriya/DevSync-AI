@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
@@ -50,6 +50,7 @@ const Workspace = () => {
   
   const [copilotLogs, setCopilotLogs] = useState(["> Enterprise AI Pipeline Secure."]);
   const [executionLogs, setExecutionLogs] = useState(["> Virtual Execution Engine standby..."]);
+  const [collabInviteRequests, setCollabInviteRequests] = useState([]);
 
   const copilotEndRef = useRef(null);
   const executionEndRef = useRef(null);
@@ -69,14 +70,14 @@ const Workspace = () => {
   useEffect(() => { executionEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [executionLogs]);
   useEffect(() => { teamChatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [teamChats]);
 
-  const recordActivity = (actionDescription) => {
+  const recordActivity = useCallback((actionDescription) => {
       const effectiveUser = currentUser || user;
       const displayName = effectiveUser?.name || effectiveUser?.email?.split('@')[0] || "Anonymous Developer";
       const payload = { roomId: id, userEmail: displayName, action: actionDescription, timestamp: new Date() };
       
       if (socketRef.current) socketRef.current.emit('log-activity', payload);
       setActivityLogs(prev => [payload, ...prev]); 
-  };
+  }, [currentUser, user, id]);
 
   useEffect(() => {
     let timerInterval;
@@ -95,7 +96,7 @@ const Workspace = () => {
         }, 1000);
     }
     return () => clearInterval(timerInterval);
-  }, [isInterviewMode, interviewEndTime]);
+  }, [isInterviewMode, interviewEndTime, recordActivity, addToast]);
 
   const formatTime = (totalSeconds) => {
       if (totalSeconds === null) return "00:00";
@@ -157,9 +158,14 @@ const Workspace = () => {
         const res = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id, { headers: { "auth-token": token } });
         setWorkspaceData(res.data);
         if (res.data.description && res.data.description.startsWith("[")) {
-          setFiles(JSON.parse(res.data.description));
-          setActiveFileName(JSON.parse(res.data.description)[0]?.name || "index.js");
+          const parsedDesc = JSON.parse(res.data.description);
+          setFiles(parsedDesc);
+          setActiveFileName(parsedDesc[0]?.name || "index.js");
         }
+        
+        axios.get(import.meta.env.VITE_BACKEND_URL + `/api/projects/${id}/invite-requests`, { headers: { "auth-token": token } })
+            .then(reqRes => setCollabInviteRequests(reqRes.data))
+            .catch(err => {});
       } catch (err) { navigate("/dashboard"); } finally { setIsLoading(false); }
     };
 
@@ -179,14 +185,26 @@ const Workspace = () => {
         fetchWorkspaceDetails(); 
         fetchHistoricalData(); 
     }
+  }, [id, token, navigate]); // Data fetching effect ends here
 
-    const newSocket = io(import.meta.env.VITE_BACKEND_URL + "");
+  // Socket connection effect
+  useEffect(() => {
+    if (!token) return;
+
+    const effectiveEmail = currentUser?.email || user?.email;
+    const effectiveName = currentUser?.name || user?.name || effectiveEmail?.split('@')[0];
+    
+    // Wait until we have the user's details before connecting
+    if (!effectiveEmail || !effectiveName) return;
+
+    const newSocket = io(import.meta.env.VITE_BACKEND_URL, {
+        auth: { token: token }
+    });
     socketRef.current = newSocket;
     setSocketInstance(newSocket);
 
     socketRef.current.on('connect', () => {
-      const effectiveEmail = user?.email || currentUser?.email || 'anonymous';
-      socketRef.current.emit('join-room', id, effectiveEmail);
+      socketRef.current.emit('join-room', id, effectiveEmail, effectiveName);
     });
 
     socketRef.current.on('room-users-update', (users) => {
@@ -204,6 +222,51 @@ const Workspace = () => {
     socketRef.current.on('receive-file-structure', ({ files: newFiles, activeFileName: newActive }) => {
         setFiles(newFiles);
         setActiveFileName(newActive);
+    });
+
+    socketRef.current.on('workspace-state-sync', (state) => {
+        if (state.files && state.files.length > 0) {
+            setFiles(state.files);
+            if (state.activeFileName) setActiveFileName(state.activeFileName);
+        }
+        if (state.interviewEndTime && state.interviewEndTime > Date.now()) {
+            setInterviewEndTime(state.interviewEndTime);
+            setIsInterviewMode(true);
+        }
+        if (state.videoParticipants && state.videoParticipants.length > 0) {
+            setShowVideoCall(true);
+        }
+    });
+
+    socketRef.current.on('invite-approval-request', (invitation) => {
+        const myId = user?.id || user?.userId || currentUser?.id || currentUser?._id;
+        if (invitation.ownerId === myId) {
+            setCollabInviteRequests(prev => [invitation, ...prev]);
+        }
+    });
+
+    socketRef.current.on('kicked-out', (data) => {
+        addToast(data.message, "error");
+        navigate("/dashboard");
+    });
+
+    socketRef.current.on('invite-decision', (data) => {
+        if (data.status === 'ALLOWED') {
+            addToast(`✅ Your request to invite ${data.target} was allowed by ${data.owner}.`, "success");
+        } else {
+            addToast(`❌ Your request to invite ${data.target} was denied by ${data.owner}.`, "error");
+        }
+    });
+
+    socketRef.current.on('invite-response', (data) => {
+        if (data.status === 'ACCEPTED') {
+            addToast(`🎉 ${data.user} has accepted the invitation to join the workspace!`, "success");
+            if (data.newMember) {
+                setWorkspaceData(prev => prev ? { ...prev, members: [...prev.members, data.newMember] } : prev);
+            }
+        } else {
+            addToast(`ℹ️ ${data.user} has declined the invitation.`, "info");
+        }
     });
 
     socketRef.current.on('receive-team-message', (newMessage) => {
@@ -225,7 +288,7 @@ const Workspace = () => {
     });
 
     return () => { socketRef.current.disconnect(); };
-  }, [id, token, navigate, user]);
+  }, [id, token, navigate, user?.id, currentUser?.email, currentUser?.name]);
 
   const handleEditorChange = (value) => {
     const currentFile = activeFileNameRef.current;
@@ -273,14 +336,30 @@ const Workspace = () => {
   const handleCreateFile = (e) => {
     e.preventDefault();
     if (!newFileNameInput.trim()) return;
-    if (files.some(f => f.name.toLowerCase() === newFileNameInput.toLowerCase())) return addToast("File conflicts with existing architecture.", "error");
+
+    // Map language to its extension
+    const extMap = {
+      javascript: '.js', python: '.py', cpp: '.cpp', java: '.java',
+      html: '.html', go: '.go', rust: '.rs', csharp: '.cs',
+      ruby: '.rb', php: '.php', swift: '.swift', kotlin: '.kt', sql: '.sql'
+    };
+
+    // If user typed a name WITHOUT a dot (no extension), auto-append the right one
+    let finalName = newFileNameInput.trim();
+    if (!finalName.includes('.')) {
+      finalName = finalName + (extMap[newFileLanguage] || '.js');
+    }
+
+    if (files.some(f => f.name.toLowerCase() === finalName.toLowerCase())) {
+      return addToast(`File "${finalName}" already exists.`, "error");
+    }
     
-    const newFiles = [...files, { name: newFileNameInput, language: newFileLanguage, content: getLanguageTemplate(newFileLanguage) }];
+    const newFiles = [...files, { name: finalName, language: newFileLanguage, content: getLanguageTemplate(newFileLanguage) }];
     setFiles(newFiles);
-    setActiveFileName(newFileNameInput);
+    setActiveFileName(finalName);
     
-    if (socketRef.current) socketRef.current.emit('file-structure-change', { roomId: id, files: newFiles, activeFileName: newFileNameInput });
-    recordActivity(`Provisioned nwe source file: ${newFileNameInput}`);
+    if (socketRef.current) socketRef.current.emit('file-structure-change', { roomId: id, files: newFiles, activeFileName: finalName });
+    recordActivity(`Provisioned new source file: ${finalName}`);
     setNewFileNameInput("");
   };
 
@@ -298,7 +377,7 @@ const Workspace = () => {
     recordActivity(`Destroyed source file: ${fileNameToDelete}`);
   };
 
-  const handlePersistConfiguration = async () => {
+  const handlePersistConfiguration = useCallback(async () => {
     if (isSynchronizing) return;
     setIsSynchronizing(true);
     setSaveStatus("Saving...");
@@ -317,7 +396,7 @@ const Workspace = () => {
         setTimeout(() => setSaveStatus("Save State"), 2500);
     } 
     finally { setIsSynchronizing(false); }
-  };
+  }, [isSynchronizing, id, token, recordActivity]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -328,10 +407,10 @@ const Workspace = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []); 
+  }, [handlePersistConfiguration]); 
 
   const handleRunCode = async () => {
-    if (!activeFile.content.trim()) return;
+    if (!activeFile?.content?.trim()) return;
     setIsRunning(true);
     setExecutionLogs(prev => [...prev, `\n> Transmitting buffer to Virtual Engine...`]);
     recordActivity(`Triggered virtual execution for ${activeFile.name}`);
@@ -343,7 +422,7 @@ const Workspace = () => {
   };
 
   const handleTriggerAudit = async () => {
-    if (!activeFile.content.trim()) return;
+    if (!activeFile?.content?.trim()) return;
     setIsAuditing(true);
     setCopilotLogs(prev => [...prev, `> Initiating Deep-Code AI Audit...`]);
     recordActivity("Requested AI Copilot code audit and optimization.");
@@ -374,9 +453,11 @@ const Workspace = () => {
     chatHistory.push({ role: "user", content: query });
 
     try {
-      const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/chat", { promptMessage: query, history: chatHistory, codeBuffer: activeFile.content }, { headers: { "auth-token": token } });
+      const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/chat", { promptMessage: query, history: chatHistory, codeBuffer: activeFile?.content || "" }, { headers: { "auth-token": token } });
       setCopilotLogs(prev => [...prev, `> [AI]: ${res.data.reply}`]);
-    } catch (err) {} finally { setIsChatting(false); }
+    } catch (err) {
+      setCopilotLogs(prev => [...prev, `> [SYSTEM ERROR] AI Copilot failed to respond.`]);
+    } finally { setIsChatting(false); }
   };
 
   const handleSendTeamMessage = (e) => {
@@ -392,15 +473,27 @@ const Workspace = () => {
   };
 
   const handleStartInterview = () => {
+      if(!socketRef.current) return;
       const durationMinutes = 45; 
       socketRef.current.emit('start-interview', { roomId: id, durationMinutes });
       recordActivity("Provisioned a 45-minute synchronized interview session.");
   };
 
   const handleEndInterview = () => {
+      if(!socketRef.current) return;
       if(window.confirm("Terminate the technical interview early?")) {
           socketRef.current.emit('end-interview', { roomId: id });
           recordActivity("Manually terminated the technical interview.");
+      }
+  };
+
+  const handleRemoveMember = async (memberId) => {
+      try {
+          await axios.delete(import.meta.env.VITE_BACKEND_URL + `/api/projects/${id}/members/${memberId}`, { headers: { "auth-token": token } });
+          setWorkspaceData(prev => ({ ...prev, members: prev.members.filter(m => m.userId !== memberId) }));
+          addToast("Member removed successfully.", "success");
+      } catch (err) {
+          addToast(err.response?.data?.error || "Failed to remove member.", "error");
       }
   };
 
@@ -415,6 +508,22 @@ const Workspace = () => {
     } catch (err) { 
         addToast(err.response?.data?.error || "Error: Failed to send invitation.", "error"); 
     }
+  };
+
+  const approveInvite = async (inviteId) => {
+      try {
+          await axios.post(import.meta.env.VITE_BACKEND_URL + `/api/invites/${inviteId}/approve`, {}, { headers: { "auth-token": token } });
+          setCollabInviteRequests(prev => prev.filter(req => req.id !== inviteId));
+          addToast("Invite approved and sent!", "success");
+      } catch (err) { addToast("Failed to approve invite", "error"); }
+  };
+
+  const denyInvite = async (inviteId) => {
+      try {
+          await axios.post(import.meta.env.VITE_BACKEND_URL + `/api/invites/${inviteId}/deny`, {}, { headers: { "auth-token": token } });
+          setCollabInviteRequests(prev => prev.filter(req => req.id !== inviteId));
+          addToast("Invite denied.", "info");
+      } catch (err) { addToast("Failed to deny invite", "error"); }
   };
 
   const languageOptions = (
@@ -440,49 +549,84 @@ const Workspace = () => {
   return (
     <div className={`h-screen w-screen flex flex-col overflow-hidden transition-colors duration-300 ${theme === 'dark' ? 'bg-[#0f172a] text-white' : 'bg-gray-50 text-gray-900'}`}>
       
-      <header className={`px-6 py-3 flex justify-between items-center shadow-md border-b shrink-0 ${theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-        <div>
-          <div className="flex items-center gap-3">
-            <span className={`text-xs font-mono px-3 py-1 rounded-full border flex items-center gap-2 ${isInterviewMode ? 'bg-red-900/50 text-red-400 border-red-800' : (theme === 'dark' ? 'bg-blue-900/50 text-blue-400 border-blue-800' : 'bg-blue-100 text-blue-700 border-blue-200')}`}>
+      {collabInviteRequests.map(req => (
+        <div key={req.id} className="bg-indigo-600 text-white px-4 py-2 flex justify-between items-center text-sm shadow-md z-50">
+           <div><span className="font-bold">{req.sender?.name || req.sender?.email}</span> wants to invite <span className="font-bold">{req.receiver?.name || req.receiver?.email}</span> to this workspace.</div>
+           <div className="flex gap-2">
+              <button onClick={() => approveInvite(req.id)} className="bg-green-500 hover:bg-green-400 px-3 py-1 rounded text-xs font-bold transition-colors">Allow</button>
+              <button onClick={() => denyInvite(req.id)} className="bg-red-500 hover:bg-red-400 px-3 py-1 rounded text-xs font-bold transition-colors">Deny</button>
+           </div>
+        </div>
+      ))}
+
+      <header className={`px-3 py-2 flex justify-between items-center shadow-md border-b shrink-0 gap-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+        <div className="flex flex-col min-w-0 shrink">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-xs font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 whitespace-nowrap ${isInterviewMode ? 'bg-red-900/50 text-red-400 border-red-800' : (theme === 'dark' ? 'bg-blue-900/50 text-blue-400 border-blue-800' : 'bg-blue-100 text-blue-700 border-blue-200')}`}>
               {isInterviewMode && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>}
-              {isInterviewMode ? `LIVE INTERVIEW: ${formatTime(remainingTime)}` : "Active Chamber"}
+              {isInterviewMode ? `INTERVIEW: ${formatTime(remainingTime)}` : "Active"}
             </span>
-            <span className={`font-mono text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>UID: {id.split('-')[0]}...</span>
+            <span className={`font-mono text-xs hidden sm:inline ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>UID: {id.split('-')[0]}...</span>
 
             {/* ONLINE USERS INDICATOR */}
-            <div className="flex items-center ml-2">
-                {onlineUsers.slice(0, 3).map((ou, i) => (
-                    <div key={ou.socketId || i} className="w-6 h-6 rounded-full bg-green-600 border-2 border-gray-900 flex items-center justify-center text-[10px] font-bold text-white shadow-sm -ml-2 first:ml-0 relative group" title={ou.email}>
-                        {(ou.email || '?').charAt(0).toUpperCase()}
-                        <div className="absolute w-2 h-2 bg-green-400 rounded-full bottom-0 right-0 border border-gray-900"></div>
-                    </div>
-                ))}
-                {onlineUsers.length > 3 && (
-                    <div className="w-6 h-6 rounded-full bg-gray-700 border-2 border-gray-900 flex items-center justify-center text-[10px] font-bold text-white shadow-sm -ml-2 z-10">
-                        +{onlineUsers.length - 3}
-                    </div>
-                )}
-                {onlineUsers.length > 0 && <span className="text-xs text-gray-500 ml-2 font-medium">{onlineUsers.length} online</span>}
+            <div className="flex items-center">
+                <select className={`text-xs py-1 px-2 border rounded-md focus:outline-none cursor-pointer font-medium shadow-sm transition-colors ${theme === 'dark' ? 'bg-gray-800 text-gray-200 border-gray-700 hover:bg-gray-700' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'}`}>
+                    <option value="" disabled selected>{onlineUsers.length} Online</option>
+                    {onlineUsers.map((ou, i) => (
+                        <option key={ou.socketId || i} disabled>{ou.name || ou.email || "Anonymous"}</option>
+                    ))}
+                </select>
             </div>
           </div>
-          <h1 className="text-xl font-bold mt-1 tracking-tight">{workspaceData ? workspaceData.title : "Unidentified Workspace"}</h1>
+          <h1 className="text-sm font-bold mt-0.5 tracking-tight truncate max-w-[180px]">{workspaceData ? workspaceData.title : "Workspace"}</h1>
         </div>
         
-        <div className="flex items-center gap-3">
-          <button onClick={() => setShowInviteModal(true)} className={`px-4 py-2 rounded-lg font-medium text-sm border shadow-sm ${theme === 'dark' ? 'bg-purple-900/50 text-purple-300 border-purple-800' : 'bg-purple-100 text-purple-700 border-purple-300'}`}>👥 Invite</button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Invite */}
+          <button onClick={() => setShowInviteModal(true)} title="Invite" className={`px-2 py-1.5 rounded-lg font-medium text-xs border shadow-sm flex items-center gap-1 ${theme === 'dark' ? 'bg-purple-900/50 text-purple-300 border-purple-800' : 'bg-purple-100 text-purple-700 border-purple-300'}`}>
+            <span>👥</span><span className="hidden lg:inline">Invite</span>
+          </button>
           
-          <button onClick={() => setShowVideoCall(!showVideoCall)} className={`px-4 py-2 rounded-lg font-bold text-sm border shadow-sm transition-colors ${showVideoCall ? 'bg-red-600 text-white border-red-500 hover:bg-red-700' : (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-300 border-emerald-800 hover:bg-emerald-900/70' : 'bg-emerald-100 text-emerald-700 border-emerald-300')}`}>{showVideoCall ? '📞 End Call' : '📹 Start Call'}</button>
+          {/* Video Call */}
+          <button onClick={() => setShowVideoCall(!showVideoCall)} title={showVideoCall ? 'End Call' : 'Start Call'} className={`px-2 py-1.5 rounded-lg font-bold text-xs border shadow-sm transition-colors flex items-center gap-1 ${showVideoCall ? 'bg-red-600 text-white border-red-500 hover:bg-red-700' : (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-300 border-emerald-800 hover:bg-emerald-900/70' : 'bg-emerald-100 text-emerald-700 border-emerald-300')}`}>
+            <span>{showVideoCall ? '📞' : '📹'}</span><span className="hidden lg:inline">{showVideoCall ? 'End Call' : 'Start Call'}</span>
+          </button>
           
+          {/* Interview */}
           {!isInterviewMode ? (
-              <button onClick={handleStartInterview} className={`px-4 py-2 rounded-lg font-bold text-sm border shadow-sm ${theme === 'dark' ? 'bg-red-900/50 text-red-300 border-red-800' : 'bg-red-100 text-red-700 border-red-300'}`}>🎤 Start 45m Interview</button>
+              <button onClick={handleStartInterview} title="Start Interview" className={`px-2 py-1.5 rounded-lg font-bold text-xs border shadow-sm flex items-center gap-1 ${theme === 'dark' ? 'bg-red-900/50 text-red-300 border-red-800' : 'bg-red-100 text-red-700 border-red-300'}`}>
+                <span>🎤</span><span className="hidden xl:inline">Start 45m Interview</span><span className="hidden lg:inline xl:hidden">Interview</span>
+              </button>
           ) : (
-              <button onClick={handleEndInterview} className={`px-4 py-2 rounded-lg font-bold text-sm border shadow-sm bg-gray-800 text-white border-gray-600 hover:bg-gray-700`}>⏹ End Interview</button>
+              <button onClick={handleEndInterview} title="End Interview" className="px-2 py-1.5 rounded-lg font-bold text-xs border shadow-sm bg-gray-800 text-white border-gray-600 hover:bg-gray-700 flex items-center gap-1">
+                <span>⏹</span><span className="hidden lg:inline">End Interview</span>
+              </button>
           )}
 
-          <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className={`p-2 rounded-full border shadow-sm w-9 h-9 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-yellow-400' : 'bg-gray-100 border-gray-300 text-gray-700'}`}>{theme === "dark" ? "☀️" : "🌙"}</button>
-          <button onClick={handleRunCode} disabled={isRunning || (isInterviewMode && remainingTime === 0)} className={`px-4 py-2 rounded-lg font-bold text-sm shadow-sm ${(isRunning || (isInterviewMode && remainingTime === 0)) ? "bg-green-900 text-green-300 border-green-800 cursor-not-allowed" : "bg-green-600 text-white border-green-500 hover:bg-green-500"}`}>▶ Run Code</button>
-          <button onClick={handlePersistConfiguration} disabled={isSynchronizing} className={`px-4 py-2 rounded-lg font-medium text-sm border shadow-sm transition-colors ${saveStatus.includes("Saved") ? "bg-green-600 border-green-500 text-white" : "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"}`}>{saveStatus}</button>
-          <button onClick={() => navigate("/dashboard")} className={`px-4 py-2 rounded-lg font-medium text-sm border shadow-sm ${theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-700 border-gray-300'}`}>Dashboard</button>
+          {/* Theme Toggle */}
+          <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Toggle Theme" className={`flex items-center justify-center p-1.5 rounded-lg border shadow-sm w-8 h-8 transition-colors ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-yellow-400 hover:bg-gray-700' : 'bg-white border-gray-300 text-blue-600 hover:bg-gray-50'}`}>
+              {theme === "dark" ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+              ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              )}
+          </button>
+
+          {/* Run Code */}
+          <button onClick={handleRunCode} disabled={isRunning || (isInterviewMode && remainingTime === 0)} title="Run Code" className={`px-2 py-1.5 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 ${(isRunning || (isInterviewMode && remainingTime === 0)) ? "bg-green-900 text-green-300 border border-green-800 cursor-not-allowed" : "bg-green-600 text-white border border-green-500 hover:bg-green-500"}`}>
+            <span>▶</span><span className="hidden lg:inline">Run Code</span>
+          </button>
+
+          {/* Save */}
+          <button onClick={handlePersistConfiguration} disabled={isSynchronizing} title="Save" className={`px-2 py-1.5 rounded-lg font-medium text-xs border shadow-sm transition-colors flex items-center gap-1 ${saveStatus.includes("Saved") ? "bg-green-600 border-green-500 text-white" : "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"}`}>
+            <span className="hidden lg:inline">{saveStatus}</span><span className="lg:hidden">💾</span>
+          </button>
+
+          {/* Dashboard */}
+          <button onClick={() => navigate("/dashboard")} title="Dashboard" className={`px-2 py-1.5 rounded-lg font-medium text-xs border shadow-sm flex items-center gap-1 ${theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-700 border-gray-300'}`}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <span className="hidden lg:inline">Dashboard</span>
+          </button>
         </div>
       </header>
 
@@ -686,31 +830,42 @@ const Workspace = () => {
       
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-            <div className={`p-6 rounded-xl border shadow-2xl w-96 ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300'}`}>
-                <h2 className="text-lg font-bold mb-2">Provision Access</h2>
-                <p className={`text-xs mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Authorize a new developer identity to access this secure environment. <b>(Note: User must have an account on DevSync first)</b></p>
-                <form onSubmit={handleInviteCollaborator} className="flex flex-col gap-3">
-                    <input type="email" required placeholder="registered-dev@devsync.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className={`text-sm px-3 py-2 border rounded focus:outline-none focus:border-blue-500 ${theme === 'dark' ? 'bg-gray-950 border-gray-700 text-white' : 'bg-gray-50'}`} />
-                    <div className="flex justify-end gap-2 mt-2">
-                        <button type="button" onClick={() => setShowInviteModal(false)} className={`px-4 py-2 text-sm font-bold rounded transition-colors ${theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-gray-200 hover:bg-gray-300'}`}>Cancel</button>
-                        <button type="submit" className="px-4 py-2 text-sm font-bold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors">Dispatch Invite</button>
+            <div className={`p-6 rounded-xl border shadow-2xl w-[450px] ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300'}`}>
+                <h2 className="text-lg font-bold mb-2">Workspace Access & Members</h2>
+                <p className={`text-xs mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Authorize a new developer or manage existing environment access. <b>(Note: User must have an account on DevSync first)</b></p>
+                <form onSubmit={handleInviteCollaborator} className="flex flex-col gap-3 mb-6">
+                    <div className="flex gap-2">
+                        <input type="email" required placeholder="registered-dev@devsync.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className={`flex-1 text-sm px-3 py-2 border rounded focus:outline-none focus:border-blue-500 ${theme === 'dark' ? 'bg-gray-950 border-gray-700 text-white' : 'bg-gray-50'}`} />
+                        <button type="submit" className="px-4 py-2 text-sm font-bold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors">Invite</button>
                     </div>
                 </form>
-                <div className="mt-4 flex items-center gap-2">
-                    <div className="flex-1 h-px bg-gray-700"></div>
-                    <span className="text-xs text-gray-500 uppercase tracking-wider font-bold">OR</span>
-                    <div className="flex-1 h-px bg-gray-700"></div>
+
+                {workspaceData?.members && workspaceData.members.length > 0 && (
+                    <div className="mb-4">
+                        <h3 className={`text-xs font-bold uppercase tracking-widest mb-2 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Current Members</h3>
+                        <div className={`max-h-40 overflow-y-auto border rounded divide-y ${theme === 'dark' ? 'border-gray-800 divide-gray-800' : 'border-gray-200 divide-gray-200'}`}>
+                            {workspaceData.members.map(m => (
+                                <div key={m.id} className={`flex items-center justify-between p-2 text-sm ${theme === 'dark' ? 'hover:bg-gray-800/50' : 'hover:bg-gray-50'}`}>
+                                    <div className="flex flex-col truncate pr-2">
+                                        <span className="font-bold truncate">{m.user?.name || m.user?.email || "Unknown"}</span>
+                                        <span className={`text-[10px] ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{m.role}</span>
+                                    </div>
+                                    { m.role !== 'OWNER' && (
+                                        (workspaceData.ownerId === (currentUser?.id || currentUser?._id || user?.id || user?.userId)) ? (
+                                            <button onClick={() => handleRemoveMember(m.userId)} className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-colors">Remove</button>
+                                        ) : (m.userId === (currentUser?.id || currentUser?._id || user?.id || user?.userId)) ? (
+                                            <button onClick={() => handleRemoveMember(m.userId)} className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-colors">Leave</button>
+                                        ) : null
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-800">
+                    <button type="button" onClick={() => setShowInviteModal(false)} className={`px-4 py-2 text-sm font-bold rounded transition-colors ${theme === 'dark' ? 'bg-gray-800 hover:bg-gray-700 text-gray-300' : 'bg-gray-200 hover:bg-gray-300'}`}>Close</button>
                 </div>
-                <button 
-                    type="button"
-                    onClick={() => {
-                        navigator.clipboard.writeText(window.location.href);
-                        addToast("Workspace link copied to clipboard!", "success");
-                    }} 
-                    className={`mt-4 w-full py-2 flex items-center justify-center gap-2 text-sm font-bold rounded border transition-colors ${theme === 'dark' ? 'bg-gray-800 border-gray-700 hover:bg-gray-700 text-gray-300' : 'bg-gray-100 border-gray-300 hover:bg-gray-200 text-gray-700'}`}
-                >
-                    📋 Copy Workspace Link
-                </button>
             </div>
         </div>
       )}

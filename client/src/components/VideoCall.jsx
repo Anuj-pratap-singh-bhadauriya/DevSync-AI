@@ -22,6 +22,7 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
   const localStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
   const peerConnectionsRef = useRef({}); // socketId -> RTCPeerConnection
+  const iceCandidateQueue = useRef({}); // socketId -> RTCIceCandidate[]
   const panelRef = useRef(null);
 
   // Drag state
@@ -30,12 +31,16 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
   const dragOffset = useRef({ x: 0, y: 0 });
 
   // Start local media
-  const startLocalStream = useCallback(async () => {
+  const startLocalStream = useCallback(async (isMounted) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } },
         audio: { echoCancellation: true, noiseSuppression: true },
       });
+      if (!isMounted.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return null;
+      }
       localStreamRef.current = stream;
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
@@ -122,6 +127,9 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
       peerConnectionsRef.current[socketId].close();
       delete peerConnectionsRef.current[socketId];
     }
+    if (iceCandidateQueue.current[socketId]) {
+      delete iceCandidateQueue.current[socketId];
+    }
     setPeers((prev) => {
       const updated = { ...prev };
       delete updated[socketId];
@@ -129,9 +137,22 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
     });
   }, []);
 
+  const flushIceCandidates = async (socketId, pc) => {
+    if (iceCandidateQueue.current[socketId]) {
+      for (const candidate of iceCandidateQueue.current[socketId]) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error('Queued ICE candidate error:', err);
+        }
+      }
+      iceCandidateQueue.current[socketId] = [];
+    }
+  };
+
   // Socket event listeners
   useEffect(() => {
-    if (!socket || !callActive) return;
+    if (!socket) return;
 
     // Someone joined the call — create offer to them
     const handleCallUserJoined = ({ socketId, email }) => {
@@ -143,10 +164,15 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
     };
 
     // Received an offer — create answer
-    const handleOffer = async ({ senderSocketId, offer }) => {
-      const pc = createPeerConnection(senderSocketId, '', false);
+    const handleOffer = async ({ senderSocketId, offer, senderEmail }) => {
+      const pc = createPeerConnection(senderSocketId, senderEmail, false);
+      setPeers((prev) => ({
+        ...prev,
+        [senderSocketId]: { email: senderEmail, stream: null },
+      }));
       try {
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        await flushIceCandidates(senderSocketId, pc);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('webrtc-answer', {
@@ -164,6 +190,7 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
       if (pc) {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          await flushIceCandidates(senderSocketId, pc);
         } catch (err) {
           console.error('Set remote description error:', err);
         }
@@ -174,10 +201,17 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
     const handleIceCandidate = async ({ senderSocketId, candidate }) => {
       const pc = peerConnectionsRef.current[senderSocketId];
       if (pc) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.error('ICE candidate error:', err);
+        if (pc.remoteDescription && pc.remoteDescription.type) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (err) {
+            console.error('ICE candidate error:', err);
+          }
+        } else {
+          if (!iceCandidateQueue.current[senderSocketId]) {
+            iceCandidateQueue.current[senderSocketId] = [];
+          }
+          iceCandidateQueue.current[senderSocketId].push(candidate);
         }
       }
     };
@@ -200,13 +234,15 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
       socket.off('webrtc-ice-candidate', handleIceCandidate);
       socket.off('call-user-left', handleCallUserLeft);
     };
-  }, [socket, callActive, createPeerConnection, removePeer]);
+  }, [socket, createPeerConnection, removePeer]);
 
   // Initialize call on mount
   useEffect(() => {
-    startLocalStream();
+    const isMounted = { current: true };
+    startLocalStream(isMounted);
 
     return () => {
+      isMounted.current = false;
       // Cleanup on unmount
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -216,9 +252,10 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
       }
       Object.values(peerConnectionsRef.current).forEach((pc) => pc.close());
       peerConnectionsRef.current = {};
+      iceCandidateQueue.current = {};
       if (socket) socket.emit('leave-call', { roomId });
     };
-  }, [startLocalStream, socket, roomId]);
+  }, [socket, roomId, startLocalStream]);
 
   // Toggle Mute
   const toggleMute = () => {
@@ -240,26 +277,36 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
     }
   };
 
+  // Restore video stream when camera comes back on
+  useEffect(() => {
+    if (localVideoRef.current) {
+      if (isScreenSharing && screenStreamRef.current) {
+        localVideoRef.current.srcObject = screenStreamRef.current;
+      } else if (localStreamRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current;
+      }
+    }
+  }, [isCameraOff, isScreenSharing]);
+
+  const stopScreenShare = () => {
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => t.stop());
+      screenStreamRef.current = null;
+    }
+    const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
+    if (cameraTrack) {
+      Object.values(peerConnectionsRef.current).forEach((pc) => {
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'video');
+        if (sender) sender.replaceTrack(cameraTrack);
+      });
+    }
+    setIsScreenSharing(false);
+  };
+
   // Screen Share
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
-      // Stop screen share, revert to camera
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((t) => t.stop());
-        screenStreamRef.current = null;
-      }
-      // Replace track in all peer connections with camera track
-      const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
-      if (cameraTrack) {
-        Object.values(peerConnectionsRef.current).forEach((pc) => {
-          const sender = pc.getSenders().find((s) => s.track?.kind === 'video');
-          if (sender) sender.replaceTrack(cameraTrack);
-        });
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = localStreamRef.current;
-        }
-      }
-      setIsScreenSharing(false);
+      stopScreenShare();
     } else {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -269,20 +316,14 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
         screenStreamRef.current = screenStream;
         const screenTrack = screenStream.getVideoTracks()[0];
 
-        // Replace video track in all peer connections
         Object.values(peerConnectionsRef.current).forEach((pc) => {
           const sender = pc.getSenders().find((s) => s.track?.kind === 'video');
           if (sender) sender.replaceTrack(screenTrack);
         });
 
-        // Show screen share in local preview
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = screenStream;
-        }
-
         // When user stops sharing from browser UI
         screenTrack.onended = () => {
-          toggleScreenShare();
+          stopScreenShare();
         };
 
         setIsScreenSharing(true);
@@ -302,11 +343,23 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
     }
     Object.values(peerConnectionsRef.current).forEach((pc) => pc.close());
     peerConnectionsRef.current = {};
-    socket.emit('leave-call', { roomId });
+    if (socket) socket.emit('leave-call', { roomId });
     onClose();
   };
 
-  // Dragging logic
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging.current) return;
+    const newX = Math.max(0, Math.min(window.innerWidth - 320, e.clientX - dragOffset.current.x));
+    const newY = Math.max(0, Math.min(window.innerHeight - 100, e.clientY - dragOffset.current.y));
+    setPosition({ x: newX, y: newY });
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isDragging.current = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  }, [handleMouseMove]);
+
   const handleMouseDown = (e) => {
     isDragging.current = true;
     dragOffset.current = {
@@ -315,19 +368,6 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
     };
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  };
-
-  const handleMouseMove = (e) => {
-    if (!isDragging.current) return;
-    const newX = Math.max(0, Math.min(window.innerWidth - 320, e.clientX - dragOffset.current.x));
-    const newY = Math.max(0, Math.min(window.innerHeight - 100, e.clientY - dragOffset.current.y));
-    setPosition({ x: newX, y: newY });
-  };
-
-  const handleMouseUp = () => {
-    isDragging.current = false;
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('mouseup', handleMouseUp);
   };
 
   const peerCount = Object.keys(peers).length;

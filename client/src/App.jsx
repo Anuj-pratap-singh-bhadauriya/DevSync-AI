@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Arena from './pages/Arena';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -54,8 +54,19 @@ function App() {
           />
           
           {/* Public Identity Verification Routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
+          <Route path="/login" element={
+            <ProtectedRoute requireAuth={false}>
+              <Login />
+            </ProtectedRoute>
+          } />
+          <Route path="/signup" element={
+            <ProtectedRoute requireAuth={false}>
+              <Signup />
+            </ProtectedRoute>
+          } />
+          
+          {/* Catch-all Route for Unknown Paths */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
     </ToastProvider>

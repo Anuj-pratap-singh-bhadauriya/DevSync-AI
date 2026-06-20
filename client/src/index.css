@@ -1,1 +1,19 @@
 @import "tailwindcss";
+
+@layer base {
+  /*
+   * Root font-size = 1vw (viewport width based).
+   * This is the KEY: when browser zooms in, CSS viewport width shrinks,
+   * so 1vw becomes smaller, and the ENTIRE UI (all rem-based Tailwind classes)
+   * scales down proportionally — exactly like zoom.
+   *
+   * At 1440px wide: 1vw = 14.4px → good laptop size
+   * At 1920px wide: 1vw = 19.2px → slightly large, clamped to 16px
+   * At 768px wide:  1vw = 7.68px → too small, clamped to 11px
+   *
+   * clamp(min, preferred, max) ensures it never goes crazy.
+   */
+  html {
+    font-size: clamp(11px, 1.05vw, 16px);
+  }
+}

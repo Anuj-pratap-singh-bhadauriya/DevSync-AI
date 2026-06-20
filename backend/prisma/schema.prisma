@@ -124,4 +124,5 @@ enum InvitationStatus {
   PENDING
   ACCEPTED
   REJECTED
+  REQUESTED_BY_COLLAB
 }

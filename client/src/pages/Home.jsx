@@ -1,11 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
 import { logout } from '../redux/authSlice'; // Ensure this path is correct for your setup
 import { useDispatch } from 'react-redux';
 import { useToast } from '../components/Toast';
+
 const Home = () => {
+    const dropdownRef = useRef(null);
+
+    // Dynamic user state from Redux (safe to use outside effects without loops)
+    const dynamicUser = useSelector(state => state.auth.user);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setShowInvitesDropdown(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
+
     const { token, user } = useSelector((state) => state.auth);
     const navigate = useNavigate();
     const dispatch = useDispatch();
@@ -14,7 +32,7 @@ const Home = () => {
     const [newWorkspaceTitle, setNewWorkspaceTitle] = useState("");
     const [isLoading, setIsLoading] = useState(true);
     const [networkStatus, setNetworkStatus] = useState("Checking..."); 
-    const [dynamicUser, setDynamicUser] = useState(user);
+    const [localUser, setLocalUser] = useState(user);
     const { addToast } = useToast();
     const [pendingInvites, setPendingInvites] = useState([]);
     const [showInvitesDropdown, setShowInvitesDropdown] = useState(false);
@@ -30,7 +48,7 @@ const Home = () => {
             if (!user?.email) {
                 try {
                     const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/getuser", {}, { headers: { "auth-token": token } });
-                    setDynamicUser(res.data);
+                    setLocalUser(res.data);
                 } catch (err) { console.error("Identity fetch failed"); }
             }
         };
@@ -70,7 +88,7 @@ const Home = () => {
         
         const pingInterval = setInterval(checkNetworkHealth, 30000);
         return () => clearInterval(pingInterval);
-    }, [token, navigate, user]);
+    }, [token, navigate, user?.id, user?.email]);
 
     const handleInitializeWorkspace = async (e) => {
         e.preventDefault();
@@ -104,7 +122,7 @@ const Home = () => {
     const handleAcceptInvite = async (inviteId) => {
         try {
             await axios.post(import.meta.env.VITE_BACKEND_URL + `/api/invitations/${inviteId}/accept`, {}, { headers: { "auth-token": token } });
-            setPendingInvites(pendingInvites.filter(inv => inv.id !== inviteId));
+            setPendingInvites(prev => prev.filter(inv => inv.id !== inviteId));
             addToast("Workspace invitation accepted!", "success");
             
             const response = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects", { headers: { "auth-token": token } });
@@ -117,7 +135,7 @@ const Home = () => {
     const handleRejectInvite = async (inviteId) => {
         try {
             await axios.post(import.meta.env.VITE_BACKEND_URL + `/api/invitations/${inviteId}/reject`, {}, { headers: { "auth-token": token } });
-            setPendingInvites(pendingInvites.filter(inv => inv.id !== inviteId));
+            setPendingInvites(prev => prev.filter(inv => inv.id !== inviteId));
             addToast("Invitation rejected.", "info");
         } catch (error) {
             addToast("Failed to reject invitation", "error");
@@ -137,11 +155,11 @@ const Home = () => {
                 <div className="flex justify-between items-center bg-[#1e293b] p-6 rounded-xl border border-gray-700 shadow-lg">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight text-white">
-                            Welcome, {dynamicUser?.name?.split(' ')[0] || 'Developer'}
+                            Welcome, {localUser?.name?.split(' ')[0] || dynamicUser?.name?.split(' ')[0] || 'Developer'}
                         </h1>
                         <p className="text-sm text-gray-400 mt-1">Manage your active environments and remote configurations.</p>
                     </div>
-                    <div className="flex gap-3 relative">
+                    <div className="flex gap-3 relative" ref={dropdownRef}>
                         <button 
                             onClick={() => setShowInvitesDropdown(!showInvitesDropdown)} 
                             className="relative p-2 rounded-lg bg-gray-800 border border-gray-700 hover:bg-gray-700 transition-colors flex items-center justify-center"
@@ -165,8 +183,8 @@ const Home = () => {
                                     ) : (
                                         pendingInvites.map(inv => (
                                             <div key={inv.id} className="p-3 border-b border-gray-700 hover:bg-gray-700/50 transition-colors">
-                                                <p className="text-sm font-semibold text-blue-400 truncate">{inv.workspace.title}</p>
-                                                <p className="text-xs text-gray-400 mt-1 truncate">from: {inv.sender.email}</p>
+                                                <p className="text-sm font-semibold text-blue-400 truncate">{inv.workspace?.title || 'Unknown Workspace'}</p>
+                                                <p className="text-xs text-gray-400 mt-1 truncate">from: {inv.sender?.email || 'Unknown User'}</p>
                                                 <div className="flex gap-2 mt-3">
                                                     <button onClick={() => handleAcceptInvite(inv.id)} className="flex-1 py-1.5 text-xs font-bold bg-green-600 hover:bg-green-500 rounded text-white transition-colors">Accept</button>
                                                     <button onClick={() => handleRejectInvite(inv.id)} className="flex-1 py-1.5 text-xs font-bold bg-gray-600 hover:bg-gray-500 rounded text-white transition-colors">Reject</button>
@@ -261,7 +279,7 @@ const Home = () => {
                             </div>
                         ) : (
                             projects.map(project => {
-                                const isOwner = project.ownerId === dynamicUser?.id;
+                                const isOwner = project.ownerId === (localUser?.id || dynamicUser?.id || dynamicUser?._id || dynamicUser?.userId || user?.id || user?.userId);
                                 
                                 return (
                                     <div 

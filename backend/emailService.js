@@ -1,4 +1,7 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
+
 
 // --- Gmail SMTP Transporter (Optimized for deployed servers) ---
 const transporter = nodemailer.createTransport({

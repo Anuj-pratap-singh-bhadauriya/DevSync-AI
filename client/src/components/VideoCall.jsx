@@ -409,7 +409,7 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
-        width: '320px',
+        minWidth: '320px',
         minHeight: '240px',
       }}
     >

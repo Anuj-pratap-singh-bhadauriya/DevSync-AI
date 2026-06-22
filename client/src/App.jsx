@@ -8,6 +8,7 @@ import Profile from './pages/Profile';
 import LandingPage from './pages/LandingPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import { ToastProvider } from './components/Toast';
+import ForgotPassword from './pages/ForgotPassword';
 
 function App() {
   return (
@@ -62,6 +63,11 @@ function App() {
           <Route path="/signup" element={
             <ProtectedRoute requireAuth={false}>
               <Signup />
+            </ProtectedRoute>
+          } />
+          <Route path="/forgot-password" element={
+            <ProtectedRoute requireAuth={false}>
+              <ForgotPassword />
             </ProtectedRoute>
           } />
           

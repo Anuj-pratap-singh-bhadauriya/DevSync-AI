@@ -83,6 +83,11 @@ const Login = () => {
               placeholder="••••••••"
               required
             />
+            <div className="text-right mt-2">
+              <Link to="/forgot-password" className="text-sm text-blue-400 hover:text-blue-300 font-medium transition-colors">
+                Forgot Password?
+              </Link>
+            </div>
           </div>
 
           <button

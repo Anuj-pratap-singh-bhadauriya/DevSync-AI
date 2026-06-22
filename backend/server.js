@@ -50,6 +50,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 // OTP STORE (In-Memory with 5-minute expiry)
 // ---------------------------------------------------------
 const otpStore = new Map(); // key: email, value: { otp, name, password, expiresAt }
+const resetOtpStore = new Map(); // key: email, value: { otp, expiresAt }
 
 // Track connected users per room for video calls
 const roomUsers = new Map(); // roomId → Set of { socketId, email }
@@ -63,6 +64,9 @@ const cleanupExpiredOTPs = () => {
     const now = Date.now();
     for (const [email, data] of otpStore.entries()) {
         if (now > data.expiresAt) otpStore.delete(email);
+    }
+    for (const [email, data] of resetOtpStore.entries()) {
+        if (now > data.expiresAt) resetOtpStore.delete(email);
     }
 };
 // Auto-cleanup every 2 minutes
@@ -400,6 +404,77 @@ app.post('/api/login', otpLimiter, async (req, res) => {
         const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1d' });
         res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
     } catch (error) { res.status(500).json({ error: "Server error." }); }
+});
+
+// ---------------------------------------------------------
+// FORGOT / RESET PASSWORD ROUTES
+// ---------------------------------------------------------
+app.post('/api/forgot-password', otpLimiter, async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: "Email is required" });
+
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user) return res.status(404).json({ error: "Account with this email does not exist." });
+
+        const otp = generateOTP();
+        const expiresAt = Date.now() + 5 * 60 * 1000; // 5 mins
+        
+        resetOtpStore.set(email, { otp, expiresAt });
+
+        const emailResult = await sendOTP(email, otp);
+        if (!emailResult.success) {
+            resetOtpStore.delete(email);
+            return res.status(400).json({ error: emailResult.message });
+        }
+
+        console.log(`✅ Password reset OTP sent to ${email}`);
+        res.status(200).json({ message: "Verification code sent to your email." });
+    } catch (error) {
+        console.error("Forgot Password Error:", error);
+        res.status(500).json({ error: "Server error. Please try again." });
+    }
+});
+
+app.post('/api/reset-password', otpLimiter, async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+        
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
+
+        const storedData = resetOtpStore.get(email);
+        if (!storedData) {
+            return res.status(400).json({ error: "OTP expired or not requested. Please try again." });
+        }
+
+        if (storedData.otp !== otp) {
+            return res.status(400).json({ error: "Invalid OTP. Please check the code and try again." });
+        }
+
+        if (Date.now() > storedData.expiresAt) {
+            resetOtpStore.delete(email);
+            return res.status(400).json({ error: "OTP has expired. Please request a new one." });
+        }
+
+        // Hash new password and update user
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await prisma.user.update({
+            where: { email },
+            data: { password: hashedPassword }
+        });
+
+        // Cleanup
+        resetOtpStore.delete(email);
+
+        console.log(`✅ Password reset successfully for ${email}`);
+        res.status(200).json({ message: "Password updated successfully! You can now log in." });
+
+    } catch (error) {
+        console.error("Reset Password Error:", error);
+        res.status(500).json({ error: "Server error. Please try again." });
+    }
 });
 
 app.post('/api/getuser', fetchuser, async (req, res) => {

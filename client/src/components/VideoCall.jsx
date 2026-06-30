@@ -1,35 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import './VideoCall.css';
 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun.relay.metered.ca:80' },
-    {
-      urls: 'turn:global.relay.metered.ca:80',
-      username: 'd0ce2ba19a5df5eeed95ad38',
-      credential: '73a730MgZ4sdJaYu'
-    },
-    {
-      urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-      username: 'd0ce2ba19a5df5eeed95ad38',
-      credential: '73a730MgZ4sdJaYu'
-    },
-    {
-      urls: 'turn:global.relay.metered.ca:443',
-      username: 'd0ce2ba19a5df5eeed95ad38',
-      credential: '73a730MgZ4sdJaYu'
-    },
-    {
-      urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-      username: 'd0ce2ba19a5df5eeed95ad38',
-      credential: '73a730MgZ4sdJaYu'
-    }
-  ],
-};
+const FALLBACK_ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
 const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -43,11 +20,26 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
   const peerConnectionsRef = useRef({}); // socketId -> RTCPeerConnection
   const iceCandidateQueue = useRef({}); // socketId -> RTCIceCandidate[]
   const panelRef = useRef(null);
+  const iceConfigRef = useRef(FALLBACK_ICE);
+
+  // Fetch TURN credentials securely from backend
+  useEffect(() => {
+    const token = localStorage.getItem('auth-token');
+    if (token) {
+      axios.get(import.meta.env.VITE_BACKEND_URL + '/api/turn-credentials', { headers: { 'auth-token': token }, timeout: 10000 })
+        .then(res => { iceConfigRef.current = res.data; })
+        .catch(() => { iceConfigRef.current = FALLBACK_ICE; });
+    }
+  }, []);
 
   // Drag state
   const [position, setPosition] = useState({ x: window.innerWidth - 340, y: window.innerHeight - 350 });
+  const [size, setSize] = useState({ w: 360, h: 300 });
   const isDragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const isResizing = useRef(false);
+  const resizeDir = useRef(null);
+  const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0, px: 0, py: 0 });
 
   // Start local media
   const startLocalStream = useCallback(async (isMounted) => {
@@ -90,7 +82,7 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
       peerConnectionsRef.current[targetSocketId].close();
     }
 
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(iceConfigRef.current);
     peerConnectionsRef.current[targetSocketId] = pc;
 
     // Add local tracks to the connection
@@ -367,6 +359,22 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
   };
 
   const handleMouseMove = useCallback((e) => {
+    if (isResizing.current) {
+      const dx = e.clientX - resizeStart.current.x;
+      const dy = e.clientY - resizeStart.current.y;
+      const dir = resizeDir.current;
+      let newW = resizeStart.current.w;
+      let newH = resizeStart.current.h;
+      let newX = resizeStart.current.px;
+      let newY = resizeStart.current.py;
+      if (dir.includes('r')) newW = Math.max(280, resizeStart.current.w + dx);
+      if (dir.includes('b')) newH = Math.max(200, resizeStart.current.h + dy);
+      if (dir.includes('l')) { newW = Math.max(280, resizeStart.current.w - dx); newX = resizeStart.current.px + (resizeStart.current.w - newW); }
+      if (dir.includes('t')) { newH = Math.max(200, resizeStart.current.h - dy); newY = resizeStart.current.py + (resizeStart.current.h - newH); }
+      setSize({ w: newW, h: newH });
+      setPosition({ x: newX, y: newY });
+      return;
+    }
     if (!isDragging.current) return;
     const newX = Math.max(0, Math.min(window.innerWidth - 320, e.clientX - dragOffset.current.x));
     const newY = Math.max(0, Math.min(window.innerHeight - 100, e.clientY - dragOffset.current.y));
@@ -375,6 +383,8 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
 
   const handleMouseUp = useCallback(() => {
     isDragging.current = false;
+    isResizing.current = false;
+    resizeDir.current = null;
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
   }, [handleMouseMove]);
@@ -388,6 +398,24 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
+
+  const startResize = (dir) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isResizing.current = true;
+    resizeDir.current = dir;
+    resizeStart.current = { x: e.clientX, y: e.clientY, w: size.w, h: size.h, px: position.x, py: position.y };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Cleanup drag/resize listeners if component unmounts mid-drag
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [handleMouseMove, handleMouseUp]);
 
   const peerCount = Object.keys(peers).length;
   const gridClass = peerCount === 0 ? 'grid-1' : peerCount === 1 ? 'grid-2' : peerCount <= 3 ? 'grid-3' : 'grid-4';
@@ -405,14 +433,27 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
   return (
     <div
       ref={panelRef}
-      className="vc-panel"
-      style={{
+      className={`vc-panel ${isFullscreen ? 'vc-fullscreen' : ''}`}
+      style={isFullscreen ? {} : {
         left: `${position.x}px`,
         top: `${position.y}px`,
-        minWidth: '320px',
-        minHeight: '240px',
+        width: `${size.w}px`,
+        height: `${size.h}px`,
       }}
     >
+      {/* Resize Handles */}
+      {!isFullscreen && (
+        <>
+          <div className="vc-resize-handle vc-resize-t" onMouseDown={startResize('t')} />
+          <div className="vc-resize-handle vc-resize-b" onMouseDown={startResize('b')} />
+          <div className="vc-resize-handle vc-resize-l" onMouseDown={startResize('l')} />
+          <div className="vc-resize-handle vc-resize-r" onMouseDown={startResize('r')} />
+          <div className="vc-resize-handle vc-resize-tl" onMouseDown={startResize('tl')} />
+          <div className="vc-resize-handle vc-resize-tr" onMouseDown={startResize('tr')} />
+          <div className="vc-resize-handle vc-resize-bl" onMouseDown={startResize('bl')} />
+          <div className="vc-resize-handle vc-resize-br" onMouseDown={startResize('br')} />
+        </>
+      )}
       {/* Header (Drag Handle) */}
       <div className="vc-header" onMouseDown={handleMouseDown}>
         <div className="vc-header-left">
@@ -420,7 +461,10 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
           <span className="vc-header-badge">{peerCount + 1} in call</span>
         </div>
         <div className="vc-header-actions">
-          <button className="vc-header-btn" onClick={() => setIsMinimized(true)} title="Minimize">
+          <button className="vc-header-btn" onClick={() => setIsFullscreen(!isFullscreen)} title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>
+            {isFullscreen ? '⛶' : '⛶'}
+          </button>
+          <button className="vc-header-btn" onClick={() => { setIsMinimized(true); setIsFullscreen(false); }} title="Minimize">
             ─
           </button>
           <button className="vc-header-btn close" onClick={endCall} title="Close">
@@ -437,23 +481,23 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
       )}
 
       {/* Video Grid */}
-      <div className={`vc-video-grid ${gridClass}`}>
+      <div className={`vc-video-grid ${isScreenSharing ? 'grid-screen-share' : gridClass}`}>
         {/* Self Video */}
-        <div className="vc-video-tile">
-          {!isCameraOff ? (
+        <div className={`vc-video-tile ${isScreenSharing ? 'vc-screen-share-main' : ''}`}>
+          {!isCameraOff || isScreenSharing ? (
             <video ref={localVideoRef} autoPlay muted playsInline />
           ) : (
             <div className="vc-avatar">
               <div className="vc-avatar-letter">{userInitial}</div>
             </div>
           )}
-          <span className="vc-video-label">You</span>
+          <span className="vc-video-label">{isScreenSharing ? 'Your Screen' : 'You'}</span>
           {isMuted && <span className="vc-video-muted-icon">🔇</span>}
         </div>
 
         {/* Remote Peers */}
         {Object.entries(peers).map(([socketId, peer]) => (
-          <div key={socketId} className="vc-video-tile">
+          <div key={socketId} className={`vc-video-tile ${isScreenSharing ? 'vc-screen-share-mini' : ''}`}>
             {peer.stream ? (
               <VideoTile stream={peer.stream} />
             ) : (

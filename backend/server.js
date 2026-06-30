@@ -1,12 +1,19 @@
 require('dotenv').config();
+
+// --- Global Error Handlers (prevent silent crashes in production) ---
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('⚠️ Unhandled Promise Rejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+    console.error('🔥 Uncaught Exception:', err);
+});
 const express = require('express');
 const cors = require('cors');
 const http = require('http'); 
-const https = require('https'); 
 const { Server } = require('socket.io'); 
 
 // --- DATABASE INTEGRATIONS ---
-const { PrismaClient } = require('@prisma/client'); 
+const prisma = require('./lib/prisma');
 const mongoose = require('mongoose'); 
 
 // --- MODELS & MIDDLEWARE ---
@@ -42,9 +49,13 @@ const io = new Server(server, {
     } 
 });
 
-const prisma = new PrismaClient();
+
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('🔥 FATAL: JWT_SECRET environment variable is not set. Server cannot start.');
+    process.exit(1);
+}
 
 // ---------------------------------------------------------
 // OTP STORE (In-Memory with 5-minute expiry)
@@ -53,7 +64,7 @@ const otpStore = new Map(); // key: email, value: { otp, name, password, expires
 const resetOtpStore = new Map(); // key: email, value: { otp, expiresAt }
 
 // Track connected users per room for video calls
-const roomUsers = new Map(); // roomId → Set of { socketId, email }
+const roomUsers = new Map(); // roomId → Map<socketId, { socketId, email, name }>
 
 // Track active workspace state for persistence
 const activeWorkspaces = new Map(); // roomId -> { files, activeFileName, interviewEndTime, videoParticipants }
@@ -71,6 +82,18 @@ const cleanupExpiredOTPs = () => {
 };
 // Auto-cleanup every 2 minutes
 setInterval(cleanupExpiredOTPs, 2 * 60 * 1000);
+
+// Cleanup abandoned activeWorkspaces entries every 30 minutes
+setInterval(() => {
+    for (const [roomId] of activeWorkspaces.entries()) {
+        // If no sockets are tracked in roomUsers for this room, it's abandoned
+        if (!roomUsers.has(roomId) || roomUsers.get(roomId).size === 0) {
+            activeWorkspaces.delete(roomId);
+            roomUsers.delete(roomId);
+            console.log(`🧹 Cleaned up abandoned workspace: ${roomId}`);
+        }
+    }
+}, 30 * 60 * 1000);
 
 const client = new OpenAI({ baseURL: "https://models.inference.ai.azure.com", apiKey: process.env.GITHUB_TOKEN });
 
@@ -93,6 +116,12 @@ const otpLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
     message: { error: "Too many attempts. Please try again after 15 minutes." }
+});
+
+const leetcodeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20, // 20 requests per 15 minutes per IP to avoid LeetCode banning our server
+    message: { error: "Too many problem requests. Please slow down." }
 });
 
 // ---------------------------------------------------------
@@ -144,8 +173,8 @@ io.on('connection', (socket) => {
             socket.userName = userName || userEmail || 'Anonymous';
 
             // Track user in room
-            if (!roomUsers.has(roomId)) roomUsers.set(roomId, new Set());
-            roomUsers.get(roomId).add({ socketId: socket.id, email: socket.userEmail, name: socket.userName });
+            if (!roomUsers.has(roomId)) roomUsers.set(roomId, new Map());
+            roomUsers.get(roomId).set(socket.id, { socketId: socket.id, email: socket.userEmail, name: socket.userName });
 
             // Ensure workspace state exists
             if (!activeWorkspaces.has(roomId)) {
@@ -161,7 +190,8 @@ io.on('connection', (socket) => {
                     files: initialFiles,
                     activeFileName: initialFiles[0]?.name || "index.js",
                     interviewEndTime: null,
-                    videoParticipants: new Set()
+                    videoParticipants: new Set(),
+                    arenaProblem: null
                 });
             }
 
@@ -171,11 +201,12 @@ io.on('connection', (socket) => {
                 files: currentState.files,
                 activeFileName: currentState.activeFileName,
                 interviewEndTime: currentState.interviewEndTime,
-                videoParticipants: Array.from(currentState.videoParticipants)
+                videoParticipants: Array.from(currentState.videoParticipants),
+                arenaProblem: currentState.arenaProblem || null
             });
 
             // Broadcast updated user list
-            io.to(roomId).emit('room-users-update', Array.from(roomUsers.get(roomId)));
+            io.to(roomId).emit('room-users-update', Array.from(roomUsers.get(roomId).values()));
             socket.to(roomId).emit('user-joined', { message: `A new collaborator has entered the workspace.` });
         } catch (error) {
             console.error("Socket join-room error:", error);
@@ -200,6 +231,12 @@ io.on('connection', (socket) => {
         socket.to(data.roomId).emit('receive-file-structure', { files: data.files, activeFileName: data.activeFileName });
     });
 
+    socket.on('arena-problem-sync', (data) => {
+        const state = activeWorkspaces.get(data.roomId);
+        if (state) state.arenaProblem = data.problem;
+        socket.to(data.roomId).emit('arena-problem-sync', data.problem);
+    });
+
     socket.on('send-team-message', async (data) => {
         try {
             if (mongoose.connection.readyState === 1) {
@@ -207,7 +244,7 @@ io.on('connection', (socket) => {
                 await newChat.save();
             }
             socket.to(data.roomId).emit('receive-team-message', { senderEmail: data.senderEmail, message: data.message, timestamp: new Date() });
-        } catch (error) {}
+        } catch (error) { console.error('send-team-message error:', error); }
     });
 
     socket.on('log-activity', async (data) => {
@@ -217,7 +254,7 @@ io.on('connection', (socket) => {
                 await newLog.save();
             }
             socket.to(data.roomId).emit('receive-activity-log', data);
-        } catch (error) {}
+        } catch (error) { console.error('log-activity error:', error); }
     });
 
     socket.on('start-interview', ({ roomId, durationMinutes }) => {
@@ -259,12 +296,7 @@ io.on('connection', (socket) => {
         const roomId = socket.roomId;
         if (roomId && roomUsers.has(roomId)) {
             const users = roomUsers.get(roomId);
-            for (const user of users) {
-                if (user.socketId === socket.id) {
-                    users.delete(user);
-                    break;
-                }
-            }
+            users.delete(socket.id);
             if (activeWorkspaces.has(roomId)) {
                 activeWorkspaces.get(roomId).videoParticipants.delete(socket.id);
             }
@@ -284,9 +316,12 @@ io.on('connection', (socket) => {
                         console.error(`Failed to auto-save workspace ${roomId}`, e);
                     }
                 }
-                activeWorkspaces.delete(roomId);
+                // Only delete in-memory state if no new users joined during the async save
+                if (!roomUsers.has(roomId)) {
+                    activeWorkspaces.delete(roomId);
+                }
             } else {
-                io.to(roomId).emit('room-users-update', Array.from(users));
+                io.to(roomId).emit('room-users-update', Array.from(users.values()));
             }
             // Notify others that this user left the call (if they were in one)
             socket.to(roomId).emit('call-user-left', { socketId: socket.id, email: socket.userEmail });
@@ -323,11 +358,12 @@ app.post('/api/send-otp', otpLimiter, async (req, res) => {
         // Generate OTP and store temporarily
         const otp = generateOTP();
         const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         otpStore.set(email, {
             otp,
             name,
-            password,
+            password: hashedPassword,
             expiresAt: Date.now() + OTP_EXPIRY_MS
         });
 
@@ -374,13 +410,12 @@ app.post('/api/verify-otp', otpLimiter, async (req, res) => {
             return res.status(400).json({ error: "Invalid OTP. Please try again." });
         }
 
-        // OTP verified! Create the user account
-        const hashedPassword = await bcrypt.hash(storedData.password, 10);
+        // OTP verified! Create the user account (password already hashed at registration time)
         await prisma.user.create({
             data: {
                 name: storedData.name,
                 email: email,
-                password: hashedPassword
+                password: storedData.password
             }
         });
 
@@ -482,6 +517,84 @@ app.post('/api/getuser', fetchuser, async (req, res) => {
     catch (error) { res.status(500).json({ error: "Server error." }); }
 });
 
+// --- TURN Credentials (served securely from env) ---
+app.get('/api/turn-credentials', fetchuser, (req, res) => {
+    res.json({
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun.relay.metered.ca:80' },
+            { urls: 'turn:global.relay.metered.ca:80', username: process.env.TURN_USERNAME, credential: process.env.TURN_CREDENTIAL },
+            { urls: 'turn:global.relay.metered.ca:80?transport=tcp', username: process.env.TURN_USERNAME, credential: process.env.TURN_CREDENTIAL },
+            { urls: 'turn:global.relay.metered.ca:443', username: process.env.TURN_USERNAME, credential: process.env.TURN_CREDENTIAL },
+            { urls: 'turns:global.relay.metered.ca:443?transport=tcp', username: process.env.TURN_USERNAME, credential: process.env.TURN_CREDENTIAL }
+        ]
+    });
+});
+
+// --- LeetCode Proxy Routes ---
+app.get('/api/leetcode/problems', fetchuser, leetcodeLimiter, async (req, res) => {
+    const limit = req.query.limit || 100;
+    const query = `
+        query problemsetQuestionList($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
+            problemsetQuestionList: questionList(categorySlug: $categorySlug limit: $limit skip: $skip filters: $filters) {
+                total: totalNum
+                questions: data {
+                    questionFrontendId
+                    title
+                    titleSlug
+                    difficulty
+                    acRate
+                    topicTags { name slug }
+                }
+            }
+        }
+    `;
+    try {
+        const response = await fetch('https://leetcode.com/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+            body: JSON.stringify({ query, variables: { categorySlug: '', limit: parseInt(limit), skip: 0, filters: {} } })
+        });
+        const data = await response.json();
+        res.json(data?.data?.problemsetQuestionList || { questions: [], total: 0 });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch problems from LeetCode' });
+    }
+});
+
+app.get('/api/leetcode/problem/:titleSlug', fetchuser, leetcodeLimiter, async (req, res) => {
+    const { titleSlug } = req.params;
+    if (!/^[a-z0-9-]{1,100}$/.test(titleSlug)) {
+        return res.status(400).json({ error: "Invalid problem slug." });
+    }
+    const query = `
+        query getQuestionDetail($titleSlug: String!) {
+            question(titleSlug: $titleSlug) {
+                questionFrontendId
+                title
+                content
+                difficulty
+                topicTags { name }
+                stats
+                hints
+            }
+        }
+    `;
+    try {
+        const response = await fetch('https://leetcode.com/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://leetcode.com' },
+            body: JSON.stringify({ query, variables: { titleSlug } })
+        });
+        const data = await response.json();
+        const q = data?.data?.question;
+        if (!q) return res.status(404).json({ error: 'Problem not found' });
+        res.json({ question: q.content, title: q.title, difficulty: q.difficulty, topicTags: q.topicTags, hints: q.hints });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch problem from LeetCode' });
+    }
+});
+
 app.post('/api/projects', fetchuser, async (req, res) => {
     try {
         const newProject = await prisma.project.create({ data: { title: req.body.title, description: req.body.description, ownerId: req.user.userId } });
@@ -510,11 +623,23 @@ app.put('/api/projects/:id', fetchuser, checkMembership, async (req, res) => {
 
 app.delete('/api/projects/:id', fetchuser, async (req, res) => {
     try {
-        const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+        const projectId = req.params.id;
+        const project = await prisma.project.findUnique({ where: { id: projectId } });
         if (!project) return res.status(404).json({ error: "Workspace not found." });
         if (project.ownerId !== req.user.userId) return res.status(401).json({ error: "Unauthorized. Only the owner can terminate this workspace." });
-        await prisma.workspaceMember.deleteMany({ where: { workspaceId: req.params.id } });
-        await prisma.project.delete({ where: { id: req.params.id } });
+        await prisma.workspaceMember.deleteMany({ where: { workspaceId: projectId } });
+        await prisma.project.delete({ where: { id: projectId } });
+
+        // Clean up in-memory state and kick any connected sockets
+        activeWorkspaces.delete(projectId);
+        if (roomUsers.has(projectId)) {
+            roomUsers.get(projectId).forEach(({ socketId }) => {
+                const s = io.sockets.sockets.get(socketId);
+                if (s) s.emit('workspace-deleted', { message: "This workspace has been deleted by the owner." });
+            });
+            roomUsers.delete(projectId);
+        }
+
         res.json({ message: "Workspace terminated successfully." });
     } catch (error) { res.status(500).json({ error: "Failed to terminate workspace." }); }
 });
@@ -537,8 +662,8 @@ app.delete('/api/projects/:id/members/:memberId', fetchuser, async (req, res) =>
             : "You have been removed from the workspace by the owner.";
 
         // Kick them out if active
-        const roomUsers = io.sockets.sockets;
-        for (const [, s] of roomUsers) {
+        const allSockets = io.sockets.sockets;
+        for (const [, s] of allSockets) {
             if (s.userEmail === member.user.email) {
                 s.emit('kicked-out', { message: kickMessage });
             }
@@ -585,8 +710,8 @@ app.post('/api/projects/:id/invite', fetchuser, checkMembership, async (req, res
         });
 
         if (isOwner) {
-            const roomUsers = io.sockets.sockets;
-            for (const [, s] of roomUsers) {
+            const allSockets = io.sockets.sockets;
+            for (const [, s] of allSockets) {
                 if (s.userEmail === targetUser.email) {
                     s.emit('new-invitation', invitation);
                 }
@@ -629,8 +754,8 @@ app.post('/api/invites/:id/approve', fetchuser, async (req, res) => {
             include: { workspace: { select: { title: true } }, sender: { select: { name: true, email: true } } }
         });
 
-        const roomUsers = io.sockets.sockets;
-        for (const [, s] of roomUsers) {
+        const allSockets = io.sockets.sockets;
+        for (const [, s] of allSockets) {
             if (s.userEmail === invite.receiver.email) {
                 s.emit('new-invitation', updated);
             }
@@ -651,8 +776,8 @@ app.post('/api/invites/:id/deny', fetchuser, async (req, res) => {
 
         await prisma.invitation.delete({ where: { id: req.params.id } });
         
-        const roomUsers = io.sockets.sockets;
-        for (const [, s] of roomUsers) {
+        const allSockets = io.sockets.sockets;
+        for (const [, s] of allSockets) {
             if (s.userEmail === invite.sender.email) {
                 s.emit('invite-decision', { status: 'DENIED', target: invite.receiver.name || invite.receiver.email, owner: invite.workspace.owner.name || "Owner" });
             }
@@ -699,8 +824,8 @@ app.post('/api/invitations/:id/accept', fetchuser, async (req, res) => {
             user: { id: invitation.receiver.id, name: invitation.receiver.name, email: invitation.receiver.email }
         };
 
-        const roomUsers = io.sockets.sockets;
-        for (const [, s] of roomUsers) {
+        const allSockets = io.sockets.sockets;
+        for (const [, s] of allSockets) {
             if (s.userEmail === invitation.sender.email || s.userEmail === invitation.workspace.owner.email) {
                 s.emit('invite-response', { status: 'ACCEPTED', user: invitation.receiver.name || invitation.receiver.email, newMember });
             }
@@ -718,8 +843,8 @@ app.post('/api/invitations/:id/reject', fetchuser, async (req, res) => {
 
         await prisma.invitation.update({ where: { id: req.params.id }, data: { status: 'REJECTED' } });
         
-        const roomUsers = io.sockets.sockets;
-        for (const [, s] of roomUsers) {
+        const allSockets = io.sockets.sockets;
+        for (const [, s] of allSockets) {
             if (s.userEmail === invitation.sender.email || s.userEmail === invitation.workspace.owner.email) {
                 s.emit('invite-response', { status: 'REJECTED', user: invitation.receiver.name || invitation.receiver.email });
             }
@@ -820,3 +945,20 @@ app.post('/api/execute', fetchuser, async (req, res) => {
 });
 
 server.listen(PORT, () => console.log(`🚀 DevSync Enterprise Engine is active on port ${PORT}`));
+
+// --- Graceful Shutdown ---
+const gracefulShutdown = async (signal) => {
+    console.log(`\n${signal} received. Shutting down gracefully...`);
+    server.close(async () => {
+        console.log('HTTP server closed.');
+        await prisma.$disconnect();
+        console.log('Prisma disconnected.');
+        await mongoose.disconnect();
+        console.log('Mongoose disconnected.');
+        process.exit(0);
+    });
+    // Force exit if server hasn't closed in 10 seconds
+    setTimeout(() => { console.error('Forced shutdown.'); process.exit(1); }, 10000);
+};
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
+import DOMPurify from 'dompurify';
 import Editor from '@monaco-editor/react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { io } from 'socket.io-client';
@@ -17,6 +18,8 @@ const Workspace = () => {
   
   const { token, user } = useSelector((state) => state.auth);
   const [currentUser, setCurrentUser] = useState(user);
+  // Keep currentUser in sync with Redux user (single source of truth)
+  useEffect(() => { if (user) setCurrentUser(user); }, [user]);
 
   const [workspaceData, setWorkspaceData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,6 +55,13 @@ const Workspace = () => {
   const [executionLogs, setExecutionLogs] = useState(["> Virtual Execution Engine standby..."]);
   const [collabInviteRequests, setCollabInviteRequests] = useState([]);
 
+  // Coding Arena states
+  const [showArena, setShowArena] = useState(false);
+  const [arenaProblems, setArenaProblems] = useState([]);
+  const [arenaLoading, setArenaLoading] = useState(false);
+  const [selectedProblem, setSelectedProblem] = useState(null);
+  const [arenaSearch, setArenaSearch] = useState('');
+
   const copilotEndRef = useRef(null);
   const executionEndRef = useRef(null);
   const teamChatEndRef = useRef(null);
@@ -65,6 +75,13 @@ const Workspace = () => {
 
   const workspaceDataRef = useRef(workspaceData);
   useEffect(() => { workspaceDataRef.current = workspaceData; }, [workspaceData]);
+
+  const arenaProblemsRef = useRef(arenaProblems);
+  useEffect(() => { arenaProblemsRef.current = arenaProblems; }, [arenaProblems]);
+
+  const saveStatusTimerRef = useRef(null);
+  // Cleanup save status timer on unmount to prevent state updates on unmounted component
+  useEffect(() => { return () => { if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current); }; }, []);
 
   useEffect(() => { copilotEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [copilotLogs]);
   useEffect(() => { executionEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [executionLogs]);
@@ -123,6 +140,181 @@ const Workspace = () => {
     }
   };
 
+  // Coding Arena — fetch problems
+  const fetchArenaProblems = useCallback(async () => {
+    if (arenaProblems.length > 0) return;
+    setArenaLoading(true);
+    try {
+      const res = await axios.get(import.meta.env.VITE_BACKEND_URL + '/api/leetcode/problems?limit=100', { headers: { 'auth-token': token }, timeout: 15000 });
+      const list = ((res.data.questions) || []).map(p => {
+        const diff = p.difficulty;
+        const badgeColor = diff === 'Easy' ? 'bg-green-900/60 text-green-400 border-green-700' : diff === 'Medium' ? 'bg-yellow-900/60 text-yellow-400 border-yellow-700' : 'bg-red-900/60 text-red-400 border-red-700';
+        return {
+          id: p.questionFrontendId,
+          slug: p.titleSlug,
+          title: `${p.questionFrontendId}. ${p.title}`,
+          difficulty: diff,
+          badgeColor,
+          category: p.topicTags?.[0]?.name || 'Algorithms',
+          acceptance: (p.acRate || 0).toFixed(1) + '%',
+          fetched: false,
+          htmlContent: ''
+        };
+      });
+      setArenaProblems(list.length > 0 ? list : fallbackProblems);
+    } catch {
+      setArenaProblems(fallbackProblems);
+    }
+    setArenaLoading(false);
+  }, [arenaProblems.length, token]);
+
+  const fallbackProblems = [
+    { id: '1', slug: 'two-sum', title: '1. Two Sum', difficulty: 'Easy', badgeColor: 'bg-green-900/60 text-green-400 border-green-700', category: 'Array', acceptance: '51.4%', fetched: false, htmlContent: '' },
+    { id: '33', slug: 'search-in-rotated-sorted-array', title: '33. Search in Rotated Sorted Array', difficulty: 'Medium', badgeColor: 'bg-yellow-900/60 text-yellow-400 border-yellow-700', category: 'Binary Search', acceptance: '39.0%', fetched: false, htmlContent: '' }
+  ];
+
+  const getArenaBoilerplate = (lang, title, difficulty) => {
+    const cleanTitle = title.replace(/^\d+\.\s*/, '');
+    const header = `// Problem: ${cleanTitle}\n// Difficulty: ${difficulty}\n\n`;
+    switch(lang) {
+      case 'python': return header + "def solve():\n    # Write your solution here\n    pass\n\nif __name__ == '__main__':\n    solve()";
+      case 'java': return header + "import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        // Write your solution here\n        \n    }\n}";
+      case 'javascript': return header + "function solve() {\n    // Write your solution here\n    \n}\n\nsolve();";
+      case 'csharp': return header + "using System;\n\nclass Program {\n    static void Main() {\n        // Write your solution here\n        \n    }\n}";
+      case 'go': return header + "package main\n\nimport \"fmt\"\n\nfunc main() {\n    // Write your solution here\n    \n}";
+      case 'cpp': default: return header + "#include <iostream>\n#include <vector>\nusing namespace std;\n\nint main() {\n    // Write your solution here\n    \n    return 0;\n}";
+    }
+  };
+
+  // Coding Arena — handle problem click
+  const handleArenaProblemClick = async (prob) => {
+    setSelectedProblem(prob);
+    setActivePanelTab('problem');
+    
+    let finalProblem = prob;
+    if (!prob.fetched) {
+      try {
+        const res = await axios.get(import.meta.env.VITE_BACKEND_URL + `/api/leetcode/problem/${prob.slug}`, { headers: { 'auth-token': token }, timeout: 15000 });
+        finalProblem = { ...prob, htmlContent: res.data.question || '<p>Problem description not available.</p>', fetched: true };
+        setSelectedProblem(finalProblem);
+        setArenaProblems(prev => prev.map(p => p.slug === prob.slug ? finalProblem : p));
+      } catch {
+        finalProblem = { ...prob, htmlContent: '<p>Failed to load problem. Please try again.</p>', fetched: true };
+        setSelectedProblem(finalProblem);
+      }
+    }
+    // Load boilerplate in editor
+    const boilerplate = getArenaBoilerplate('cpp', finalProblem.title, finalProblem.difficulty);
+    const arenaFile = { name: `arena_${finalProblem.id}.cpp`, language: 'cpp', content: boilerplate };
+    
+    const currentFiles = filesRef.current;
+    const exists = currentFiles.find(f => f.name === arenaFile.name);
+    let newFiles = currentFiles;
+    
+    if (!exists) {
+      newFiles = [...currentFiles, arenaFile];
+      setFiles(newFiles);
+    }
+    
+    setActiveFileName(arenaFile.name);
+    
+    // Broadcast the new file and active file change to peers
+    if (socketRef.current) {
+      socketRef.current.emit('file-structure-change', { 
+        roomId: id, 
+        files: newFiles, 
+        activeFileName: arenaFile.name 
+      });
+      // Also broadcast the problem selection so peers see the problem description
+      socketRef.current.emit('arena-problem-sync', {
+        roomId: id,
+        problem: finalProblem
+      });
+    }
+  };
+
+  const restoreArenaProblem = async (fileName, emitSync = true) => {
+    if (!fileName.startsWith('arena_')) return;
+    const match = fileName.match(/arena_(\d+)\./);
+    if (!match) return;
+    const probId = match[1];
+
+    let currentArenaProblems = arenaProblemsRef.current;
+    
+    // If problems list isn't loaded yet, fetch it to find the requested ID
+    if (currentArenaProblems.length === 0) {
+       try {
+         const res = await axios.get(import.meta.env.VITE_BACKEND_URL + '/api/leetcode/problems?limit=100', { headers: { 'auth-token': token }, timeout: 15000 });
+         const list = (res.data.questions || []).map(p => {
+           const diff = p.difficulty;
+           const badgeColor = diff === 'Easy' ? 'bg-green-900/60 text-green-400 border-green-700' : diff === 'Medium' ? 'bg-yellow-900/60 text-yellow-400 border-yellow-700' : 'bg-red-900/60 text-red-400 border-red-700';
+           return {
+             id: p.questionFrontendId,
+             slug: p.titleSlug,
+             title: `${p.questionFrontendId}. ${p.title}`,
+             difficulty: diff,
+             badgeColor,
+             category: p.topicTags?.[0]?.name || 'Algorithms',
+             acceptance: (p.acRate || 0).toFixed(1) + '%',
+             fetched: false,
+             htmlContent: ''
+           };
+         });
+         if (list.length > 0) {
+           currentArenaProblems = list;
+           setArenaProblems(list);
+         } else {
+           currentArenaProblems = fallbackProblems;
+         }
+       } catch {
+         currentArenaProblems = fallbackProblems;
+       }
+    }
+
+    const staticProb = currentArenaProblems.find(p => String(p.id) === probId) || fallbackProblems.find(p => String(p.id) === probId);
+    if (!staticProb) return;
+
+    let finalProblem = staticProb;
+    if (!staticProb.fetched) {
+      try {
+        const res = await axios.get(import.meta.env.VITE_BACKEND_URL + `/api/leetcode/problem/${staticProb.slug}`, { headers: { 'auth-token': token }, timeout: 15000 });
+        finalProblem = { ...staticProb, htmlContent: res.data.question || '<p>Problem description not available.</p>', fetched: true };
+        setArenaProblems(prev => prev.map(p => p.slug === staticProb.slug ? finalProblem : p));
+      } catch {
+        finalProblem = { ...staticProb, htmlContent: '<p>Failed to load problem. Please try again.</p>', fetched: true };
+      }
+    }
+
+    setSelectedProblem(finalProblem);
+    setActivePanelTab('problem');
+
+    if (emitSync && socketRef.current) {
+      socketRef.current.emit('arena-problem-sync', {
+        roomId: id,
+        problem: finalProblem
+      });
+    }
+  };
+
+  const fileClickTimerRef = useRef(null);
+
+  const handleFileClick = (fileName) => {
+    setActiveFileName(fileName);
+    
+    // Debounce socket emit and arena restore to prevent burst on rapid clicking
+    if (fileClickTimerRef.current) clearTimeout(fileClickTimerRef.current);
+    fileClickTimerRef.current = setTimeout(() => {
+      if (socketRef.current) {
+        socketRef.current.emit('file-structure-change', { 
+          roomId: id, 
+          files: filesRef.current, 
+          activeFileName: fileName 
+        });
+      }
+      restoreArenaProblem(fileName, true);
+    }, 300);
+  };
+
   const getFileExtension = (lang) => {
     switch(lang) {
       case 'python': return 'main.py';
@@ -157,10 +349,21 @@ const Workspace = () => {
       try {
         const res = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id, { headers: { "auth-token": token } });
         setWorkspaceData(res.data);
+        // Restore saved files from DB as initial state (socket workspace-state-sync will override if peers are online)
         if (res.data.description && res.data.description.startsWith("[")) {
-          const parsedDesc = JSON.parse(res.data.description);
-          setFiles(parsedDesc);
-          setActiveFileName(parsedDesc[0]?.name || "index.js");
+          try {
+            const parsedFiles = JSON.parse(res.data.description);
+            if (parsedFiles.length > 0) {
+              setFiles(prev => {
+                // Only restore from DB if we still have the default single file
+                if (prev.length === 1 && prev[0].name === "index.js" && prev[0].content === "// Initialize enterprise workspace...\n") {
+                  setActiveFileName(parsedFiles[0]?.name || "index.js");
+                  return parsedFiles;
+                }
+                return prev;
+              });
+            }
+          } catch (e) {}
         }
         
         axios.get(import.meta.env.VITE_BACKEND_URL + `/api/projects/${id}/invite-requests`, { headers: { "auth-token": token } })
@@ -224,10 +427,29 @@ const Workspace = () => {
         setActiveFileName(newActive);
     });
 
+    socketRef.current.on('arena-problem-sync', (problem) => {
+        setSelectedProblem(problem);
+        setActivePanelTab('problem');
+        // Update local arena problems list if needed
+        setArenaProblems(prev => {
+            if (!prev.find(p => p.slug === problem.slug)) return prev;
+            return prev.map(p => p.slug === problem.slug ? problem : p);
+        });
+    });
+
     socketRef.current.on('workspace-state-sync', (state) => {
         if (state.files && state.files.length > 0) {
             setFiles(state.files);
-            if (state.activeFileName) setActiveFileName(state.activeFileName);
+            if (state.activeFileName) {
+                setActiveFileName(state.activeFileName);
+                // Use server-persisted arena problem if available, otherwise fetch
+                if (state.arenaProblem) {
+                    setSelectedProblem(state.arenaProblem);
+                    setActivePanelTab('problem');
+                } else {
+                    restoreArenaProblem(state.activeFileName, false);
+                }
+            }
         }
         if (state.interviewEndTime && state.interviewEndTime > Date.now()) {
             setInterviewEndTime(state.interviewEndTime);
@@ -287,7 +509,12 @@ const Workspace = () => {
         setCopilotLogs(prev => [...prev, `> System: Interview manually terminated by administrator.`]);
     });
 
-    return () => { socketRef.current.disconnect(); };
+    socketRef.current.on('workspace-deleted', () => {
+        alert("This workspace has been deleted by the owner.");
+        navigate('/dashboard');
+    });
+
+    return () => { newSocket.disconnect(); };
   }, [id, token, navigate, user?.id, currentUser?.email, currentUser?.name]);
 
   const handleEditorChange = (value) => {
@@ -307,7 +534,21 @@ const Workspace = () => {
         [currentLang]: currentContent 
     };
 
-    const newContent = updatedLanguageContents[newLang] || getLanguageTemplate(newLang);
+    let newContent = updatedLanguageContents[newLang];
+    if (!newContent) {
+        if (activeFile.name.startsWith('arena_')) {
+            const match = activeFile.name.match(/arena_(\d+)\./);
+            const probId = match ? match[1] : '';
+            const prob = arenaProblems.find(p => String(p.id) === probId) || fallbackProblems.find(p => String(p.id) === probId) || selectedProblem;
+            if (prob) {
+                newContent = getArenaBoilerplate(newLang, prob.title, prob.difficulty);
+            } else {
+                newContent = getArenaBoilerplate(newLang, `Problem ${probId}`, "Unknown");
+            }
+        } else {
+            newContent = getLanguageTemplate(newLang);
+        }
+    }
 
     const dotIndex = activeFile.name.lastIndexOf('.');
     const baseName = dotIndex !== -1 ? activeFile.name.substring(0, dotIndex) : activeFile.name;
@@ -389,11 +630,13 @@ const Workspace = () => {
         recordActivity("Committed workspace state to remote PostgreSQL database.");
         
         setSaveStatus("Saved! ✅");
-        setTimeout(() => setSaveStatus("Save State"), 2500);
+        if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
+        saveStatusTimerRef.current = setTimeout(() => setSaveStatus("Save State"), 2500);
     } 
     catch (err) { 
         setSaveStatus("Error!");
-        setTimeout(() => setSaveStatus("Save State"), 2500);
+        if (saveStatusTimerRef.current) clearTimeout(saveStatusTimerRef.current);
+        saveStatusTimerRef.current = setTimeout(() => setSaveStatus("Save State"), 2500);
     } 
     finally { setIsSynchronizing(false); }
   }, [isSynchronizing, id, token, recordActivity]);
@@ -582,6 +825,11 @@ const Workspace = () => {
         </div>
         
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Arena Toggle */}
+          <button onClick={() => { setShowArena(!showArena); if (!showArena) fetchArenaProblems(); }} title="Coding Arena" className={`px-2 py-1.5 rounded-lg font-medium text-xs border shadow-sm flex items-center gap-1 ${showArena ? 'bg-orange-600 text-white border-orange-500' : (theme === 'dark' ? 'bg-orange-900/50 text-orange-300 border-orange-800' : 'bg-orange-100 text-orange-700 border-orange-300')}`}>
+            <span>🏟️</span><span className="hidden lg:inline">Arena</span>
+          </button>
+          
           {/* Invite */}
           <button onClick={() => setShowInviteModal(true)} title="Invite" className={`px-2 py-1.5 rounded-lg font-medium text-xs border shadow-sm flex items-center gap-1 ${theme === 'dark' ? 'bg-purple-900/50 text-purple-300 border-purple-800' : 'bg-purple-100 text-purple-700 border-purple-300'}`}>
             <span>👥</span><span className="hidden lg:inline">Invite</span>
@@ -635,24 +883,50 @@ const Workspace = () => {
           
           <Panel defaultSize={20} minSize={15} className={`rounded-xl border flex flex-col shadow-sm h-full ${theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-300'}`}>
             <div className="p-4 flex flex-col h-full overflow-hidden">
-              <h3 className="text-xs font-bold font-mono text-gray-400 mb-4 tracking-widest uppercase">File Directory</h3>
-              <form onSubmit={handleCreateFile} className="mb-4 flex flex-col gap-2 shrink-0">
-                <input type="text" placeholder="filename.js" value={newFileNameInput} onChange={(e) => setNewFileNameInput(e.target.value)} className={`text-xs px-2 py-1.5 border rounded focus:outline-none focus:border-blue-500 ${theme === 'dark' ? 'bg-gray-950 border-gray-700' : 'bg-gray-50'}`} />
-                <div className="flex gap-2">
-                  <select value={newFileLanguage} onChange={(e) => setNewFileLanguage(e.target.value)} className={`text-[11px] font-medium border rounded px-1 py-1 flex-1 outline-none cursor-pointer ${theme === 'dark' ? 'bg-gray-950 border-gray-700' : 'bg-white'}`}>
-                    {languageOptions}
-                  </select>
-                  <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3 py-1 rounded">+</button>
-                </div>
-              </form>
-              <div className="flex-1 overflow-y-auto flex flex-col gap-1 pr-1">
-                {files.map((f) => (
-                    <div key={f.name} onClick={() => setActiveFileName(f.name)} className={`group px-3 py-2 rounded-lg flex justify-between items-center cursor-pointer border transition-colors ${f.name === activeFileName ? 'bg-blue-900/30 border-blue-800 text-blue-400 font-medium' : 'border-transparent text-gray-400 hover:bg-gray-800'}`}>
-                      <div className="flex items-center gap-2 overflow-hidden"><span className="text-xs font-mono truncate">{f.name}</span></div>
-                      <button onClick={(e) => handleDeleteFile(f.name, e)} className="text-gray-500 hover:text-red-500 text-xs font-bold opacity-0 group-hover:opacity-100">✕</button>
+              <h3 className="text-xs font-bold font-mono text-gray-400 mb-4 tracking-widest uppercase">
+                {showArena ? 'Coding Arena' : 'File Directory'}
+              </h3>
+              
+              {!showArena ? (
+                <>
+                  <form onSubmit={handleCreateFile} className="mb-4 flex flex-col gap-2 shrink-0">
+                    <input type="text" placeholder="filename.js" value={newFileNameInput} onChange={(e) => setNewFileNameInput(e.target.value)} className={`text-xs px-2 py-1.5 border rounded focus:outline-none focus:border-blue-500 ${theme === 'dark' ? 'bg-gray-950 border-gray-700' : 'bg-gray-50'}`} />
+                    <div className="flex gap-2">
+                      <select value={newFileLanguage} onChange={(e) => setNewFileLanguage(e.target.value)} className={`text-[11px] font-medium border rounded px-1 py-1 flex-1 outline-none cursor-pointer ${theme === 'dark' ? 'bg-gray-950 border-gray-700' : 'bg-white'}`}>
+                        {languageOptions}
+                      </select>
+                      <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3 py-1 rounded">+</button>
                     </div>
-                ))}
-              </div>
+                  </form>
+                  <div className="flex-1 overflow-y-auto flex flex-col gap-1 pr-1">
+                    {files.map((f) => (
+                        <div key={f.name} onClick={() => handleFileClick(f.name)} className={`group px-3 py-2 rounded-lg flex justify-between items-center cursor-pointer border transition-colors ${f.name === activeFileName ? 'bg-blue-900/30 border-blue-800 text-blue-400 font-medium' : 'border-transparent text-gray-400 hover:bg-gray-800'}`}>
+                          <div className="flex items-center gap-2 overflow-hidden"><span className="text-xs font-mono truncate">{f.name}</span></div>
+                          <button onClick={(e) => handleDeleteFile(f.name, e)} className="text-gray-500 hover:text-red-500 text-xs font-bold opacity-0 group-hover:opacity-100">✕</button>
+                        </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col h-full overflow-hidden">
+                  <input type="text" placeholder="Search problems..." value={arenaSearch} onChange={(e) => setArenaSearch(e.target.value)} className={`mb-3 text-xs px-2 py-1.5 border rounded focus:outline-none focus:border-orange-500 ${theme === 'dark' ? 'bg-gray-950 border-gray-700 text-white' : 'bg-gray-50 text-gray-900'}`} />
+                  <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">
+                    {arenaLoading ? (
+                      <div className="text-xs text-gray-500 text-center py-4 animate-pulse">Loading Arena...</div>
+                    ) : (
+                      arenaProblems.filter(p => p.title.toLowerCase().includes(arenaSearch.toLowerCase())).map((p) => (
+                        <div key={p.slug} onClick={() => handleArenaProblemClick(p)} className={`p-2 rounded-lg border cursor-pointer transition-colors ${selectedProblem?.slug === p.slug ? 'bg-orange-900/20 border-orange-500/50' : (theme === 'dark' ? 'bg-gray-800 border-gray-700 hover:bg-gray-750' : 'bg-white border-gray-200 hover:bg-gray-50')}`}>
+                          <h4 className={`text-xs font-bold mb-1 truncate ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>{p.title}</h4>
+                          <div className="flex gap-1">
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded border ${p.badgeColor}`}>{p.difficulty}</span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded border ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-100 border-gray-300 text-gray-600'}`}>{p.category}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </Panel>
 
@@ -740,11 +1014,33 @@ const Workspace = () => {
 
           <Panel defaultSize={30} minSize={25} className={`rounded-xl border flex flex-col shadow-sm h-full overflow-hidden ${theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white'}`}>
             
-            <div className={`flex items-center border-b shrink-0 ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
-                <button onClick={() => setActivePanelTab('copilot')} className={`flex-1 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors ${activePanelTab === 'copilot' ? 'text-blue-500' : 'text-gray-500 hover:text-gray-300'}`}>Copilot {activePanelTab === 'copilot' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-500"></div>}</button>
-                <button onClick={() => setActivePanelTab('chat')} className={`flex-1 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors ${activePanelTab === 'chat' ? 'text-green-500' : 'text-gray-500 hover:text-gray-300'}`}>Team Chat {activePanelTab === 'chat' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-green-500"></div>}</button>
-                <button onClick={() => setActivePanelTab('audit')} className={`flex-1 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors ${activePanelTab === 'audit' ? 'text-amber-500' : 'text-gray-500 hover:text-gray-300'}`}>Audit Trail {activePanelTab === 'audit' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-amber-500"></div>}</button>
+            <div className={`flex items-center border-b shrink-0 overflow-x-auto ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
+                <button onClick={() => setActivePanelTab('problem')} className={`px-3 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors whitespace-nowrap ${activePanelTab === 'problem' ? 'text-orange-500' : 'text-gray-500 hover:text-gray-300'}`}>Problem {activePanelTab === 'problem' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500"></div>}</button>
+                <button onClick={() => setActivePanelTab('copilot')} className={`flex-1 px-3 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors whitespace-nowrap ${activePanelTab === 'copilot' ? 'text-blue-500' : 'text-gray-500 hover:text-gray-300'}`}>Copilot {activePanelTab === 'copilot' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-500"></div>}</button>
+                <button onClick={() => setActivePanelTab('chat')} className={`flex-1 px-3 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors whitespace-nowrap ${activePanelTab === 'chat' ? 'text-green-500' : 'text-gray-500 hover:text-gray-300'}`}>Chat {activePanelTab === 'chat' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-green-500"></div>}</button>
+                <button onClick={() => setActivePanelTab('audit')} className={`flex-1 px-3 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors whitespace-nowrap ${activePanelTab === 'audit' ? 'text-amber-500' : 'text-gray-500 hover:text-gray-300'}`}>Audit {activePanelTab === 'audit' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-amber-500"></div>}</button>
             </div>
+
+            {activePanelTab === 'problem' && (
+                <div className={`p-4 flex flex-col h-full overflow-y-auto text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-800'}`}>
+                    {selectedProblem ? (
+                        <>
+                            <h2 className={`text-lg font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-black'}`}>{selectedProblem.title}</h2>
+                            <div className="flex gap-2 mb-4">
+                                <span className={`text-[10px] px-2 py-1 rounded border font-bold ${selectedProblem.badgeColor}`}>{selectedProblem.difficulty}</span>
+                                <span className={`text-[10px] px-2 py-1 rounded border font-bold ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-gray-100 border-gray-300 text-gray-600'}`}>Acceptance: {selectedProblem.acceptance}</span>
+                            </div>
+                            <div className="prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedProblem.htmlContent) }} />
+                        </>
+                    ) : (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center">
+                            <span className="text-4xl mb-2">🏟️</span>
+                            <p className="text-gray-500 font-medium">Coding Arena Mode Active</p>
+                            <p className="text-xs text-gray-400 mt-2">Select a problem from the left sidebar to view details.</p>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {activePanelTab === 'copilot' && (
                 <div className="p-4 flex flex-col h-full overflow-hidden">

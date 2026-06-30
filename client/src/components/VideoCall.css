@@ -6,7 +6,7 @@
   position: fixed;
   z-index: 9999;
   border-radius: 16px;
-  overflow: hidden;
+  overflow: visible;
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(16px);
   border: 1px solid #334155;
@@ -14,7 +14,80 @@
   display: flex;
   flex-direction: column;
   transition: box-shadow 0.3s ease;
-  resize: both;
+}
+
+/* Edge Resize Handles */
+.vc-resize-handle { position: absolute; z-index: 10000; }
+.vc-resize-t { top: -4px; left: 8px; right: 8px; height: 8px; cursor: n-resize; }
+.vc-resize-b { bottom: -4px; left: 8px; right: 8px; height: 8px; cursor: s-resize; }
+.vc-resize-l { left: -4px; top: 8px; bottom: 8px; width: 8px; cursor: w-resize; }
+.vc-resize-r { right: -4px; top: 8px; bottom: 8px; width: 8px; cursor: e-resize; }
+.vc-resize-tl { top: -4px; left: -4px; width: 12px; height: 12px; cursor: nw-resize; }
+.vc-resize-tr { top: -4px; right: -4px; width: 12px; height: 12px; cursor: ne-resize; }
+.vc-resize-bl { bottom: -4px; left: -4px; width: 12px; height: 12px; cursor: sw-resize; }
+.vc-resize-br { bottom: -4px; right: -4px; width: 12px; height: 12px; cursor: se-resize; }
+
+/* Fullscreen State */
+.vc-panel.vc-fullscreen {
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0;
+  resize: none;
+  border: none;
+  background: #0f172a;
+}
+
+.vc-panel.vc-fullscreen .vc-video-grid {
+  padding: 16px;
+  gap: 12px;
+}
+
+.vc-panel.vc-fullscreen .vc-video-tile {
+  border-radius: 16px;
+}
+
+.vc-panel.vc-fullscreen .vc-avatar-letter {
+  width: 80px;
+  height: 80px;
+  font-size: 36px;
+}
+
+.vc-panel.vc-fullscreen .vc-video-label {
+  font-size: 13px;
+  padding: 4px 10px;
+  bottom: 8px;
+  left: 8px;
+}
+
+.vc-panel.vc-fullscreen .vc-controls {
+  padding: 14px 24px;
+  gap: 16px;
+}
+
+.vc-panel.vc-fullscreen .vc-ctrl-btn {
+  width: 48px;
+  height: 48px;
+  font-size: 20px;
+}
+
+.vc-panel.vc-fullscreen .vc-ctrl-btn.end-call {
+  width: 54px;
+  height: 54px;
+}
+
+.vc-panel.vc-fullscreen .vc-ctrl-label {
+  font-size: 11px;
+}
+
+.vc-panel.vc-fullscreen .vc-header-title {
+  font-size: 15px;
+}
+
+.vc-panel.vc-fullscreen .vc-header-badge {
+  font-size: 11px;
+  padding: 3px 8px;
 }
 
 .vc-panel:hover {
@@ -100,10 +173,39 @@
   overflow: hidden;
 }
 
-.vc-video-grid.grid-1 { grid-template-columns: 1fr; }
-.vc-video-grid.grid-2 { grid-template-columns: 1fr 1fr; }
-.vc-video-grid.grid-3 { grid-template-columns: 1fr 1fr; }
-.vc-video-grid.grid-4 { grid-template-columns: 1fr 1fr; }
+.vc-video-grid.grid-1 { grid-template-columns: 1fr; grid-template-rows: 1fr; }
+.vc-video-grid.grid-2 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+.vc-video-grid.grid-3 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.vc-video-grid.grid-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+
+/* Screen Share Focused Layout */
+.vc-video-grid.grid-screen-share {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr auto;
+}
+
+.vc-screen-share-main {
+  aspect-ratio: auto !important;
+  min-height: 0;
+  flex: 1;
+}
+
+.vc-screen-share-main video {
+  object-fit: contain !important;
+  background: #000;
+}
+
+.vc-screen-share-mini {
+  max-width: 120px;
+  max-height: 80px;
+  position: absolute;
+  bottom: 60px;
+  right: 12px;
+  z-index: 5;
+  border: 2px solid #3b82f6;
+  border-radius: 8px !important;
+  aspect-ratio: auto !important;
+}
 
 /* Video Tile */
 .vc-video-tile {
@@ -112,8 +214,8 @@
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid #334155;
-  aspect-ratio: 16/9;
   min-height: 0;
+  min-width: 0;
 }
 
 .vc-video-tile video {

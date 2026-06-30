@@ -2,6 +2,31 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
+import DOMPurify from 'dompurify';
+
+// Defined at module scope so it's created once, not on every render
+const backupProblems = [
+    {
+        id: "prob-1",
+        title: "1. Search in Rotated Sorted Array II",
+        difficulty: "Medium",
+        badgeColor: "text-yellow-400 border-yellow-500/30 bg-yellow-500/10",
+        category: "Binary Search",
+        acceptance: "43.2%",
+        isBackup: true,
+        htmlContent: "<p>There is an integer array <code>nums</code> sorted in non-decreasing order (not necessarily with distinct values). Before being passed to your function, <code>nums</code> is rotated at an unknown pivot index.</p><p>Given the rotated array and a target, return true if target is in nums, otherwise false.</p><br/><strong>Example 1:</strong><pre><strong>Input:</strong> nums = [2,5,6,0,0,1,2], target = 0\n<strong>Output:</strong> true</pre><ul><li><code>1 <= nums.length <= 5000</code></li><li><code>-10<sup>4</sup> <= nums[i] <= 10<sup>4</sup></code></li></ul>"
+    },
+    {
+        id: "prob-2",
+        title: "2. Two Sum",
+        difficulty: "Easy",
+        badgeColor: "text-green-400 border-green-500/30 bg-green-500/10",
+        category: "Hash Maps",
+        acceptance: "51.4%",
+        isBackup: true,
+        htmlContent: "<p>Given an array of integers <code>nums</code> and an integer <code>target</code>, return indices of the two numbers such that they add up to target.</p><p>You may assume that each input would have exactly one solution, and you may not use the same element twice.</p><br/><strong>Example 1:</strong><pre><strong>Input:</strong> nums = [2,7,11,15], target = 9\n<strong>Output:</strong> [0,1]</pre><ul><li><code>2 <= nums.length <= 10<sup>4</sup></code></li></ul>"
+    }
+];
 
 const Arena = () => {
     const navigate = useNavigate();
@@ -13,37 +38,13 @@ const Arena = () => {
     const [expandedProblem, setExpandedProblem] = useState(null);
     const [fetchingDetails, setFetchingDetails] = useState({}); // NAYA: Tracks loading state for individual problems
 
-    // Failsafe Database (In case Live API goes down)
-    const backupProblems = [
-        {
-            id: "prob-1",
-            title: "1. Search in Rotated Sorted Array II",
-            difficulty: "Medium",
-            badgeColor: "text-yellow-400 border-yellow-500/30 bg-yellow-500/10",
-            category: "Binary Search",
-            acceptance: "43.2%",
-            isBackup: true,
-            htmlContent: "<p>There is an integer array <code>nums</code> sorted in non-decreasing order (not necessarily with distinct values). Before being passed to your function, <code>nums</code> is rotated at an unknown pivot index.</p><p>Given the rotated array and a target, return true if target is in nums, otherwise false.</p><br/><strong>Example 1:</strong><pre><strong>Input:</strong> nums = [2,5,6,0,0,1,2], target = 0\n<strong>Output:</strong> true</pre><ul><li><code>1 <= nums.length <= 5000</code></li><li><code>-10<sup>4</sup> <= nums[i] <= 10<sup>4</sup></code></li></ul>"
-        },
-        {
-            id: "prob-2",
-            title: "2. Two Sum",
-            difficulty: "Easy",
-            badgeColor: "text-green-400 border-green-500/30 bg-green-500/10",
-            category: "Hash Maps",
-            acceptance: "51.4%",
-            isBackup: true,
-            htmlContent: "<p>Given an array of integers <code>nums</code> and an integer <code>target</code>, return indices of the two numbers such that they add up to target.</p><p>You may assume that each input would have exactly one solution, and you may not use the same element twice.</p><br/><strong>Example 1:</strong><pre><strong>Input:</strong> nums = [2,7,11,15], target = 9\n<strong>Output:</strong> [0,1]</pre><ul><li><code>2 <= nums.length <= 10<sup>4</sup></code></li></ul>"
-        }
-    ];
-
-    // STEP 1: Fetch Top 30 Problems List
+    // STEP 1: Fetch Top 100 Problems List
     useEffect(() => {
         const fetchLiveLeetCodeData = async () => {
             try {
-                const res = await axios.get("https://alfa-leetcode-api.onrender.com/problems?limit=100", { timeout: 6000 });
+                const res = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/leetcode/problems?limit=100", { headers: { "auth-token": token }, timeout: 15000 });
                 
-                const liveData = res.data.problemsetQuestionList.map((p) => {
+                const liveData = (res.data.questions || []).map((p) => {
                     const diff = p.difficulty;
                     const bColor = diff === 'Easy' ? 'text-green-400 border-green-500/30 bg-green-500/10' : 
                                    diff === 'Medium' ? 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' : 
@@ -56,13 +57,13 @@ const Arena = () => {
                         difficulty: p.difficulty,
                         badgeColor: bColor,
                         category: p.topicTags?.[0]?.name || "Algorithms",
-                        acceptance: p.acRate.toFixed(1) + "%",
+                        acceptance: (p.acRate || 0).toFixed(1) + "%",
                         isBackup: false,
-                        fetched: false, // Ensures we only fetch details once
+                        fetched: false,
                         htmlContent: ""
                     };
                 });
-                setPlatformProblems(liveData);
+                setPlatformProblems(liveData.length > 0 ? liveData : backupProblems);
             } catch (error) {
                 console.warn("Live API Offline. Deploying Failsafe Backup.");
                 setPlatformProblems(backupProblems);
@@ -87,8 +88,9 @@ const Arena = () => {
 
         setFetchingDetails(prev => ({ ...prev, [prob.id]: true }));
         try {
-            const res = await axios.get(`https://alfa-leetcode-api.onrender.com/select?titleSlug=${prob.slug}`);
-            const exactLeetCodeHTML = res.data.question || "<p>Error loading detailed statement.</p>";
+            const res = await axios.get(import.meta.env.VITE_BACKEND_URL + `/api/leetcode/problem/${prob.slug}`, { headers: { "auth-token": token }, timeout: 15000 });
+            const rawHTML = res.data.question || "<p>Error loading detailed statement.</p>";
+            const exactLeetCodeHTML = DOMPurify.sanitize(rawHTML);
             
             setPlatformProblems(prev => prev.map(p => {
                 if (p.id === prob.id) return { ...p, fetched: true, htmlContent: exactLeetCodeHTML };

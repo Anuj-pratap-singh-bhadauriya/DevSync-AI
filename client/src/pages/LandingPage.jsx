@@ -2,8 +2,19 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 
+const isTokenExpired = (token) => {
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+};
+
 const LandingPage = () => {
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { isAuthenticated, token } = useSelector((state) => state.auth);
+  const isLoggedIn = isAuthenticated && !isTokenExpired(token);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState(null);
   const [scrolled, setScrolled] = useState(false);
@@ -154,7 +165,7 @@ const LandingPage = () => {
 
           {/* CTA Buttons */}
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }} className="lp-desktop-nav">
-            {isAuthenticated ? (
+            {isLoggedIn ? (
               <Link to="/dashboard" style={{
                 padding: '10px 24px', borderRadius: '10px', fontSize: '14px', fontWeight: '600',
                 background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff',
@@ -206,7 +217,7 @@ const LandingPage = () => {
               >{item}</button>
             ))}
             <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-              {isAuthenticated ? (
+              {isLoggedIn ? (
                 <Link to="/dashboard" style={{ flex: 1, padding: '12px', borderRadius: '10px', background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff', textDecoration: 'none', textAlign: 'center', fontWeight: '600', fontSize: '14px' }}>Dashboard →</Link>
               ) : (
                 <>
@@ -256,7 +267,7 @@ const LandingPage = () => {
           </p>
 
           <div className="lp-animate" style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to={isAuthenticated ? "/dashboard" : "/signup"} style={{
+            <Link to={isLoggedIn ? "/dashboard" : "/signup"} style={{
               padding: '14px 36px', borderRadius: '12px', fontSize: '16px', fontWeight: '700',
               background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff',
               textDecoration: 'none', transition: 'all 0.3s',
@@ -265,7 +276,7 @@ const LandingPage = () => {
             onMouseEnter={(e) => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = '0 8px 30px rgba(59,130,246,0.5)'; }}
             onMouseLeave={(e) => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = '0 4px 25px rgba(59,130,246,0.35)'; }}
             >
-              {isAuthenticated ? 'Go to Dashboard →' : 'Start Building Free →'}
+              {isLoggedIn ? 'Go to Dashboard →' : 'Start Building Free →'}
             </Link>
             <button onClick={() => smoothScroll('features')} style={{
               padding: '14px 28px', borderRadius: '12px', fontSize: '16px', fontWeight: '600',
@@ -415,7 +426,7 @@ const LandingPage = () => {
         <div className="lp-animate" style={{ position: 'relative', zIndex: 1 }}>
           <h2 style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: '800', color: '#fff', marginBottom: '16px', letterSpacing: '-1px' }}>Ready to Code Together?</h2>
           <p style={{ color: '#94a3b8', fontSize: '17px', maxWidth: '500px', margin: '0 auto 32px' }}>Join thousands of developers building the future, together. It's free to get started.</p>
-          <Link to={isAuthenticated ? "/dashboard" : "/signup"} style={{
+          <Link to={isLoggedIn ? "/dashboard" : "/signup"} style={{
             display: 'inline-block', padding: '16px 40px', borderRadius: '12px', fontSize: '16px', fontWeight: '700',
             background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', color: '#fff',
             textDecoration: 'none', boxShadow: '0 4px 25px rgba(59,130,246,0.35)',
@@ -423,7 +434,7 @@ const LandingPage = () => {
           }}
           onMouseEnter={(e) => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = '0 8px 30px rgba(59,130,246,0.5)'; }}
           onMouseLeave={(e) => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = '0 4px 25px rgba(59,130,246,0.35)'; }}
-          >{isAuthenticated ? 'Go to Dashboard →' : 'Get Started Free →'}</Link>
+          >{isLoggedIn ? 'Go to Dashboard →' : 'Get Started Free →'}</Link>
         </div>
       </section>
 

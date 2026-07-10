@@ -23,14 +23,16 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
   const iceConfigRef = useRef(FALLBACK_ICE);
 
   // Fetch TURN credentials securely from backend
-  useEffect(() => {
+  const fetchTurnCredentials = async () => {
     const token = localStorage.getItem('auth-token');
-    if (token) {
-      axios.get(import.meta.env.VITE_BACKEND_URL + '/api/turn-credentials', { headers: { 'auth-token': token }, timeout: 10000 })
-        .then(res => { iceConfigRef.current = res.data; })
-        .catch(() => { iceConfigRef.current = FALLBACK_ICE; });
+    if (!token) return FALLBACK_ICE;
+    try {
+      const res = await axios.get(import.meta.env.VITE_BACKEND_URL + '/api/turn-credentials', { headers: { 'auth-token': token }, timeout: 10000 });
+      return res.data;
+    } catch {
+      return FALLBACK_ICE;
     }
-  }, []);
+  };
 
   // Drag state
   const [position, setPosition] = useState({ x: window.innerWidth - 340, y: window.innerHeight - 350 });
@@ -44,10 +46,16 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
   // Start local media
   const startLocalStream = useCallback(async (isMounted) => {
     try {
+      // 1. Fetch TURN credentials BEFORE starting the connection
+      iceConfigRef.current = await fetchTurnCredentials();
+      if (!isMounted.current) return null;
+
+      // 2. Request camera and microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } },
         audio: { echoCancellation: true, noiseSuppression: true },
       });
+      
       if (!isMounted.current) {
         stream.getTracks().forEach((t) => t.stop());
         return null;
@@ -59,7 +67,7 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
       setCallActive(true);
       setError('');
 
-      // Notify others you joined the call
+      // 3. Notify others you joined the call (using correct TURN servers)
       socket.emit('join-call', { roomId });
 
       return stream;

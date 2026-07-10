@@ -790,7 +790,7 @@ const Workspace = () => {
   if (isLoading) return <div className={`h-screen w-screen flex items-center justify-center ${theme === 'dark' ? 'bg-[#0f172a]' : 'bg-gray-100'}`}><div className="text-blue-500 animate-pulse text-lg font-mono tracking-widest">INITIALIZING ENTERPRISE ENVIRONMENT...</div></div>;
 
   return (
-    <div className={`h-screen w-screen flex flex-col overflow-hidden transition-colors duration-300 ${theme === 'dark' ? 'bg-[#0f172a] text-white' : 'bg-gray-50 text-gray-900'}`}>
+    <div className={`h-screen w-screen flex flex-col overflow-hidden transition-colors duration-300 ${theme === 'dark' ? 'bg-[#1e1e1e] text-[#cccccc]' : 'bg-[#ffffff] text-[#333333]'}`}>
       
       {collabInviteRequests.map(req => (
         <div key={req.id} className="bg-indigo-600 text-white px-4 py-2 flex justify-between items-center text-sm shadow-md z-50">
@@ -802,18 +802,18 @@ const Workspace = () => {
         </div>
       ))}
 
-      <header className={`px-3 py-2 flex justify-between items-center shadow-md border-b shrink-0 gap-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+      <header className={`px-3 py-1.5 flex justify-between items-center border-b shrink-0 gap-2 ${theme === 'dark' ? 'bg-[#333333] border-[#252526]' : 'bg-[#f3f3f3] border-[#cccccc]'}`}>
         <div className="flex flex-col min-w-0 shrink">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-xs font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 whitespace-nowrap ${isInterviewMode ? 'bg-red-900/50 text-red-400 border-red-800' : (theme === 'dark' ? 'bg-blue-900/50 text-blue-400 border-blue-800' : 'bg-blue-100 text-blue-700 border-blue-200')}`}>
-              {isInterviewMode && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>}
-              {isInterviewMode ? `INTERVIEW: ${formatTime(remainingTime)}` : "Active"}
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 border flex items-center gap-1 whitespace-nowrap ${isInterviewMode ? 'bg-[#d16969] text-white border-[#d16969]' : (theme === 'dark' ? 'bg-[#007acc] text-white border-[#007acc]' : 'bg-[#007acc] text-white border-[#007acc]')}`}>
+              {isInterviewMode && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>}
+              {isInterviewMode ? `INTERVIEW: ${formatTime(remainingTime)}` : "ACTIVE"}
             </span>
-            <span className={`font-mono text-xs hidden sm:inline ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>UID: {id.split('-')[0]}...</span>
+            <span className={`font-mono text-[10px] hidden sm:inline ${theme === 'dark' ? 'text-[#858585]' : 'text-[#858585]'}`}>UID: {id.split('-')[0]}...</span>
 
             {/* ONLINE USERS INDICATOR */}
             <div className="flex items-center">
-                <select className={`text-xs py-1 px-2 border rounded-md focus:outline-none cursor-pointer font-medium shadow-sm transition-colors ${theme === 'dark' ? 'bg-gray-800 text-gray-200 border-gray-700 hover:bg-gray-700' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-50'}`}>
+                <select className={`text-[10px] py-0.5 px-1 border rounded-sm focus:outline-none cursor-pointer font-medium transition-colors ${theme === 'dark' ? 'bg-[#3c3c3c] text-[#cccccc] border-[#3c3c3c] hover:bg-[#464646]' : 'bg-[#e4e4e4] text-[#333333] border-[#e4e4e4] hover:bg-[#d4d4d4]'}`}>
                     <option value="" disabled selected>{onlineUsers.length} Online</option>
                     {onlineUsers.map((ou, i) => (
                         <option key={ou.socketId || i} disabled>{ou.name || ou.email || "Anonymous"}</option>
@@ -826,33 +826,33 @@ const Workspace = () => {
         
         <div className="flex items-center gap-1.5 shrink-0">
           {/* Arena Toggle */}
-          <button onClick={() => { setShowArena(!showArena); if (!showArena) fetchArenaProblems(); }} title="Coding Arena" className={`px-2 py-1.5 rounded-lg font-medium text-xs border shadow-sm flex items-center gap-1 ${showArena ? 'bg-orange-600 text-white border-orange-500' : (theme === 'dark' ? 'bg-orange-900/50 text-orange-300 border-orange-800' : 'bg-orange-100 text-orange-700 border-orange-300')}`}>
+          <button onClick={() => { setShowArena(!showArena); if (!showArena) fetchArenaProblems(); }} title="Coding Arena" className={`px-2 py-1 rounded-sm font-medium text-[10px] uppercase tracking-wider flex items-center gap-1 ${showArena ? 'bg-[#007acc] text-white' : (theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]')}`}>
             <span>🏟️</span><span className="hidden lg:inline">Arena</span>
           </button>
           
           {/* Invite */}
-          <button onClick={() => setShowInviteModal(true)} title="Invite" className={`px-2 py-1.5 rounded-lg font-medium text-xs border shadow-sm flex items-center gap-1 ${theme === 'dark' ? 'bg-purple-900/50 text-purple-300 border-purple-800' : 'bg-purple-100 text-purple-700 border-purple-300'}`}>
+          <button onClick={() => setShowInviteModal(true)} title="Invite" className={`px-2 py-1 rounded-sm font-medium text-[10px] uppercase tracking-wider flex items-center gap-1 ${theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]'}`}>
             <span>👥</span><span className="hidden lg:inline">Invite</span>
           </button>
           
           {/* Video Call */}
-          <button onClick={() => setShowVideoCall(!showVideoCall)} title={showVideoCall ? 'End Call' : 'Start Call'} className={`px-2 py-1.5 rounded-lg font-bold text-xs border shadow-sm transition-colors flex items-center gap-1 ${showVideoCall ? 'bg-red-600 text-white border-red-500 hover:bg-red-700' : (theme === 'dark' ? 'bg-emerald-900/50 text-emerald-300 border-emerald-800 hover:bg-emerald-900/70' : 'bg-emerald-100 text-emerald-700 border-emerald-300')}`}>
+          <button onClick={() => setShowVideoCall(!showVideoCall)} title={showVideoCall ? 'End Call' : 'Start Call'} className={`px-2 py-1 rounded-sm font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1 ${showVideoCall ? 'bg-[#d16969] text-white hover:bg-[#c15959]' : (theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]')}`}>
             <span>{showVideoCall ? '📞' : '📹'}</span><span className="hidden lg:inline">{showVideoCall ? 'End Call' : 'Start Call'}</span>
           </button>
           
           {/* Interview */}
           {!isInterviewMode ? (
-              <button onClick={handleStartInterview} title="Start Interview" className={`px-2 py-1.5 rounded-lg font-bold text-xs border shadow-sm flex items-center gap-1 ${theme === 'dark' ? 'bg-red-900/50 text-red-300 border-red-800' : 'bg-red-100 text-red-700 border-red-300'}`}>
+              <button onClick={handleStartInterview} title="Start Interview" className={`px-2 py-1 rounded-sm font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 ${theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]'}`}>
                 <span>🎤</span><span className="hidden xl:inline">Start 45m Interview</span><span className="hidden lg:inline xl:hidden">Interview</span>
               </button>
           ) : (
-              <button onClick={handleEndInterview} title="End Interview" className="px-2 py-1.5 rounded-lg font-bold text-xs border shadow-sm bg-gray-800 text-white border-gray-600 hover:bg-gray-700 flex items-center gap-1">
+              <button onClick={handleEndInterview} title="End Interview" className="px-2 py-1 rounded-sm font-bold text-[10px] uppercase tracking-wider bg-[#d16969] text-white hover:bg-[#c15959] flex items-center gap-1">
                 <span>⏹</span><span className="hidden lg:inline">End Interview</span>
               </button>
           )}
 
           {/* Theme Toggle */}
-          <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Toggle Theme" className={`flex items-center justify-center p-1.5 rounded-lg border shadow-sm w-8 h-8 transition-colors ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-yellow-400 hover:bg-gray-700' : 'bg-white border-gray-300 text-blue-600 hover:bg-gray-50'}`}>
+          <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Toggle Theme" className={`flex items-center justify-center p-1 rounded-sm w-6 h-6 transition-colors ${theme === 'dark' ? 'hover:bg-[#464646] text-[#cccccc]' : 'hover:bg-[#d4d4d4] text-[#333333]'}`}>
               {theme === "dark" ? (
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
               ) : (
@@ -861,48 +861,48 @@ const Workspace = () => {
           </button>
 
           {/* Run Code */}
-          <button onClick={handleRunCode} disabled={isRunning || (isInterviewMode && remainingTime === 0)} title="Run Code" className={`px-2 py-1.5 rounded-lg font-bold text-xs shadow-sm flex items-center gap-1 ${(isRunning || (isInterviewMode && remainingTime === 0)) ? "bg-green-900 text-green-300 border border-green-800 cursor-not-allowed" : "bg-green-600 text-white border border-green-500 hover:bg-green-500"}`}>
+          <button onClick={handleRunCode} disabled={isRunning || (isInterviewMode && remainingTime === 0)} title="Run Code" className={`px-2 py-1 rounded-sm font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 ${(isRunning || (isInterviewMode && remainingTime === 0)) ? "bg-[#4d4d4d] text-[#888888] cursor-not-allowed" : "bg-[#007acc] text-white hover:bg-[#0062a3]"}`}>
             <span>▶</span><span className="hidden lg:inline">Run Code</span>
           </button>
 
           {/* Save */}
-          <button onClick={handlePersistConfiguration} disabled={isSynchronizing} title="Save" className={`px-2 py-1.5 rounded-lg font-medium text-xs border shadow-sm transition-colors flex items-center gap-1 ${saveStatus.includes("Saved") ? "bg-green-600 border-green-500 text-white" : "bg-blue-600 text-white border-blue-600 hover:bg-blue-700"}`}>
+          <button onClick={handlePersistConfiguration} disabled={isSynchronizing} title="Save" className={`px-2 py-1 rounded-sm font-medium text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1 ${saveStatus.includes("Saved") ? "bg-[#007acc] text-white" : (theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]')}`}>
             <span className="hidden lg:inline">{saveStatus}</span><span className="lg:hidden">💾</span>
           </button>
 
           {/* Dashboard */}
-          <button onClick={() => navigate("/dashboard")} title="Dashboard" className={`px-2 py-1.5 rounded-lg font-medium text-xs border shadow-sm flex items-center gap-1 ${theme === 'dark' ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-700 border-gray-300'}`}>
+          <button onClick={() => navigate("/dashboard")} title="Dashboard" className={`px-2 py-1 rounded-sm font-medium text-[10px] uppercase tracking-wider flex items-center gap-1 ${theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]'}`}>
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             <span className="hidden lg:inline">Dashboard</span>
           </button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-hidden p-2 relative bg-transparent">
+      <div className="flex-1 overflow-hidden p-0 relative bg-transparent">
         <PanelGroup direction="horizontal" className="w-full h-full flex">
           
-          <Panel defaultSize={20} minSize={15} className={`rounded-xl border flex flex-col shadow-sm h-full ${theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-300'}`}>
-            <div className="p-4 flex flex-col h-full overflow-hidden">
-              <h3 className="text-xs font-bold font-mono text-gray-400 mb-4 tracking-widest uppercase">
-                {showArena ? 'Coding Arena' : 'File Directory'}
+          <Panel defaultSize={20} minSize={15} className={`border-r flex flex-col h-full ${theme === 'dark' ? 'bg-[#252526] border-[#2b2b2b]' : 'bg-[#f3f3f3] border-[#cccccc]'}`}>
+            <div className="p-0 pt-2 flex flex-col h-full overflow-hidden">
+              <h3 className="text-[10px] font-bold text-gray-500 mb-2 pl-4 tracking-widest uppercase">
+                {showArena ? 'Coding Arena' : 'Explorer'}
               </h3>
               
               {!showArena ? (
                 <>
-                  <form onSubmit={handleCreateFile} className="mb-4 flex flex-col gap-2 shrink-0">
-                    <input type="text" placeholder="filename.js" value={newFileNameInput} onChange={(e) => setNewFileNameInput(e.target.value)} className={`text-xs px-2 py-1.5 border rounded focus:outline-none focus:border-blue-500 ${theme === 'dark' ? 'bg-gray-950 border-gray-700' : 'bg-gray-50'}`} />
-                    <div className="flex gap-2">
-                      <select value={newFileLanguage} onChange={(e) => setNewFileLanguage(e.target.value)} className={`text-[11px] font-medium border rounded px-1 py-1 flex-1 outline-none cursor-pointer ${theme === 'dark' ? 'bg-gray-950 border-gray-700' : 'bg-white'}`}>
+                  <form onSubmit={handleCreateFile} className="mb-2 px-4 flex flex-col gap-1 shrink-0">
+                    <input type="text" placeholder="filename.js" value={newFileNameInput} onChange={(e) => setNewFileNameInput(e.target.value)} className={`text-[11px] px-2 py-1 border rounded-sm focus:outline-none focus:border-[#007acc] ${theme === 'dark' ? 'bg-[#3c3c3c] border-[#3c3c3c] text-white' : 'bg-white border-[#cccccc]'}`} />
+                    <div className="flex gap-1">
+                      <select value={newFileLanguage} onChange={(e) => setNewFileLanguage(e.target.value)} className={`text-[10px] border rounded-sm px-1 py-0.5 flex-1 outline-none cursor-pointer ${theme === 'dark' ? 'bg-[#3c3c3c] border-[#3c3c3c] text-white' : 'bg-white border-[#cccccc]'}`}>
                         {languageOptions}
                       </select>
-                      <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3 py-1 rounded">+</button>
+                      <button type="submit" className="bg-[#007acc] hover:bg-[#0062a3] text-white text-[10px] px-2 py-0.5 rounded-sm">+</button>
                     </div>
                   </form>
-                  <div className="flex-1 overflow-y-auto flex flex-col gap-1 pr-1">
+                  <div className="flex-1 overflow-y-auto flex flex-col">
                     {files.map((f) => (
-                        <div key={f.name} onClick={() => handleFileClick(f.name)} className={`group px-3 py-2 rounded-lg flex justify-between items-center cursor-pointer border transition-colors ${f.name === activeFileName ? 'bg-blue-900/30 border-blue-800 text-blue-400 font-medium' : 'border-transparent text-gray-400 hover:bg-gray-800'}`}>
-                          <div className="flex items-center gap-2 overflow-hidden"><span className="text-xs font-mono truncate">{f.name}</span></div>
-                          <button onClick={(e) => handleDeleteFile(f.name, e)} className="text-gray-500 hover:text-red-500 text-xs font-bold opacity-0 group-hover:opacity-100">✕</button>
+                        <div key={f.name} onClick={() => handleFileClick(f.name)} className={`group px-4 py-1 flex justify-between items-center cursor-pointer transition-colors ${f.name === activeFileName ? (theme === 'dark' ? 'bg-[#37373d] text-white' : 'bg-[#e4e6f1] text-[#333333]') : (theme === 'dark' ? 'text-[#cccccc] hover:bg-[#2a2d2e]' : 'text-[#616161] hover:bg-[#e8e8e8]')}`}>
+                          <div className="flex items-center gap-2 overflow-hidden"><span className="text-[11px] font-mono truncate">{f.name}</span></div>
+                          <button onClick={(e) => handleDeleteFile(f.name, e)} className="text-gray-500 hover:text-red-500 text-[10px] font-bold opacity-0 group-hover:opacity-100">✕</button>
                         </div>
                     ))}
                   </div>
@@ -930,28 +930,28 @@ const Workspace = () => {
             </div>
           </Panel>
 
-          <PanelResizeHandle className="w-1.5 mx-1 cursor-col-resize hover:bg-blue-500/20 rounded transition-colors" />
+          <PanelResizeHandle className={`w-[1px] cursor-col-resize transition-colors ${theme === 'dark' ? 'bg-[#2b2b2b] hover:bg-[#007acc]' : 'bg-[#cccccc] hover:bg-[#007acc]'}`} />
 
           <Panel defaultSize={50} minSize={35} className="h-full">
             <PanelGroup direction="vertical" className="w-full h-full flex flex-col">
-              <Panel defaultSize={70} minSize={30} className={`rounded-xl border flex flex-col shadow-inner overflow-hidden ${theme === 'dark' ? 'bg-[#1e1e1e] border-gray-800' : 'bg-white border-gray-300'}`}>
+              <Panel defaultSize={70} minSize={30} className={`flex flex-col overflow-hidden ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-[#ffffff]'}`}>
                 
-                <div className={`px-4 py-2 flex justify-between items-center border-b shrink-0 ${theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-                  <div className="flex items-center gap-3">
-                      <span className={`font-mono text-sm px-3 py-1 rounded border ${theme === 'dark' ? 'text-blue-400 bg-blue-900/30 border-blue-800' : 'text-blue-700 bg-blue-50 border-blue-200'}`}>📄 {activeFile.name}</span>
+                <div className={`flex items-center border-b shrink-0 h-9 overflow-x-auto custom-scrollbar ${theme === 'dark' ? 'bg-[#2d2d2d] border-[#2b2b2b]' : 'bg-[#f3f3f3] border-[#cccccc]'}`}>
+                  <div className={`flex items-center h-full px-4 border-r border-t-2 shrink-0 ${theme === 'dark' ? 'bg-[#1e1e1e] border-r-[#2b2b2b] border-t-[#007acc] text-[#cccccc]' : 'bg-[#ffffff] border-r-[#cccccc] border-t-[#007acc] text-[#333333]'}`}>
+                      <span className="font-mono text-[11px] mr-3">{activeFile.name}</span>
                       
                       <select 
                           value={activeFile.language} 
                           onChange={handleActiveFileLanguageChange}
-                          className={`text-xs font-medium border rounded px-2 py-1 outline-none cursor-pointer shadow-sm ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-300 focus:border-blue-500' : 'bg-white border-gray-300 text-gray-700 focus:border-blue-500'}`}
+                          className={`text-[9px] border-none outline-none cursor-pointer bg-transparent ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}
                       >
                           {languageOptions}
                       </select>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span>
-                    <span className={`text-[10px] uppercase font-mono tracking-wider ${theme === 'dark' ? 'text-green-400' : 'text-green-600'}`}>Connection Secure</span>
+                  <div className="flex items-center gap-2 ml-auto pr-4 shrink-0">
+                    <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#007acc] opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-[#007acc]"></span></span>
+                    <span className={`text-[9px] uppercase font-mono tracking-wider ${theme === 'dark' ? 'text-[#007acc]' : 'text-[#007acc]'}`}>Connected</span>
                   </div>
                 </div>
 
@@ -978,18 +978,18 @@ const Workspace = () => {
                   />
                 </div>
               </Panel>
-              <PanelResizeHandle className="h-1.5 my-1 cursor-row-resize hover:bg-blue-500/20 rounded transition-colors" />
+              <PanelResizeHandle className={`h-[1px] my-0 cursor-row-resize transition-colors ${theme === 'dark' ? 'bg-[#2b2b2b] hover:bg-[#007acc]' : 'bg-[#cccccc] hover:bg-[#007acc]'}`} />
               
-              <Panel defaultSize={30} minSize={15} className={`rounded-xl border flex flex-col shadow-inner overflow-hidden ${theme === 'dark' ? 'bg-[#0d1117] border-gray-700' : 'bg-gray-100'}`}>
-                <div className={`px-4 py-1.5 border-b flex justify-between items-center ${theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-gray-200'}`}>
-                  <span className="text-[11px] font-bold font-mono text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span> Execution Terminal
+              <Panel defaultSize={30} minSize={15} className={`flex flex-col overflow-hidden ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-[#ffffff]'}`}>
+                <div className={`px-4 py-1.5 flex justify-between items-center ${theme === 'dark' ? 'bg-[#1e1e1e]' : 'bg-[#ffffff]'}`}>
+                  <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                    TERMINAL
                   </span>
                 </div>
                 
-                <div className="flex-1 flex overflow-hidden min-h-0">
-                    <div className={`w-[30%] flex flex-col border-r ${theme === 'dark' ? 'border-gray-800' : 'border-gray-300'}`}>
-                        <div className={`px-3 py-1 text-[9px] font-bold tracking-widest uppercase border-b text-center ${theme === 'dark' ? 'text-gray-500 border-gray-800 bg-gray-900/50' : 'text-gray-500 border-gray-200 bg-gray-200/50'}`}>
+                <div className="flex-1 flex overflow-hidden min-h-0 border-t border-[#2b2b2b]">
+                    <div className={`w-[30%] flex flex-col border-r ${theme === 'dark' ? 'border-[#2b2b2b] bg-[#1e1e1e]' : 'border-[#cccccc] bg-[#ffffff]'}`}>
+                        <div className={`px-3 py-1 text-[9px] font-bold tracking-widest uppercase border-b text-center ${theme === 'dark' ? 'text-gray-500 border-[#2b2b2b]' : 'text-gray-500 border-[#cccccc]'}`}>
                             Standard Input (stdin)
                         </div>
                         <textarea 
@@ -1010,15 +1010,15 @@ const Workspace = () => {
             </PanelGroup>
           </Panel>
 
-          <PanelResizeHandle className="w-1.5 mx-1 cursor-col-resize hover:bg-blue-500/20 rounded transition-colors" />
+          <PanelResizeHandle className={`w-[1px] cursor-col-resize transition-colors ${theme === 'dark' ? 'bg-[#2b2b2b] hover:bg-[#007acc]' : 'bg-[#cccccc] hover:bg-[#007acc]'}`} />
 
-          <Panel defaultSize={30} minSize={25} className={`rounded-xl border flex flex-col shadow-sm h-full overflow-hidden ${theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-white'}`}>
+          <Panel defaultSize={30} minSize={25} className={`flex flex-col h-full overflow-hidden ${theme === 'dark' ? 'bg-[#252526]' : 'bg-[#f3f3f3]'}`}>
             
-            <div className={`flex items-center border-b shrink-0 overflow-x-auto ${theme === 'dark' ? 'border-gray-800' : 'border-gray-200'}`}>
-                <button onClick={() => setActivePanelTab('problem')} className={`px-3 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors whitespace-nowrap ${activePanelTab === 'problem' ? 'text-orange-500' : 'text-gray-500 hover:text-gray-300'}`}>Problem {activePanelTab === 'problem' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-orange-500"></div>}</button>
-                <button onClick={() => setActivePanelTab('copilot')} className={`flex-1 px-3 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors whitespace-nowrap ${activePanelTab === 'copilot' ? 'text-blue-500' : 'text-gray-500 hover:text-gray-300'}`}>Copilot {activePanelTab === 'copilot' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-500"></div>}</button>
-                <button onClick={() => setActivePanelTab('chat')} className={`flex-1 px-3 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors whitespace-nowrap ${activePanelTab === 'chat' ? 'text-green-500' : 'text-gray-500 hover:text-gray-300'}`}>Chat {activePanelTab === 'chat' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-green-500"></div>}</button>
-                <button onClick={() => setActivePanelTab('audit')} className={`flex-1 px-3 py-3 text-[11px] uppercase tracking-wider font-bold relative transition-colors whitespace-nowrap ${activePanelTab === 'audit' ? 'text-amber-500' : 'text-gray-500 hover:text-gray-300'}`}>Audit {activePanelTab === 'audit' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-amber-500"></div>}</button>
+            <div className={`flex items-center shrink-0 overflow-x-auto h-9 ${theme === 'dark' ? 'bg-[#2d2d2d]' : 'bg-[#ececec]'}`}>
+                <button onClick={() => setActivePanelTab('problem')} className={`px-4 h-full flex items-center text-[10px] uppercase tracking-wider relative transition-colors whitespace-nowrap ${activePanelTab === 'problem' ? (theme === 'dark' ? 'text-white bg-[#252526] border-t-2 border-[#007acc]' : 'text-[#333333] bg-[#f3f3f3] border-t-2 border-[#007acc]') : 'text-[#858585] hover:text-[#cccccc]'}`}>PROBLEM</button>
+                <button onClick={() => setActivePanelTab('copilot')} className={`flex-1 h-full flex items-center justify-center text-[10px] uppercase tracking-wider relative transition-colors whitespace-nowrap ${activePanelTab === 'copilot' ? (theme === 'dark' ? 'text-white bg-[#252526] border-t-2 border-[#007acc]' : 'text-[#333333] bg-[#f3f3f3] border-t-2 border-[#007acc]') : 'text-[#858585] hover:text-[#cccccc]'}`}>COPILOT</button>
+                <button onClick={() => setActivePanelTab('chat')} className={`flex-1 h-full flex items-center justify-center text-[10px] uppercase tracking-wider relative transition-colors whitespace-nowrap ${activePanelTab === 'chat' ? (theme === 'dark' ? 'text-white bg-[#252526] border-t-2 border-[#007acc]' : 'text-[#333333] bg-[#f3f3f3] border-t-2 border-[#007acc]') : 'text-[#858585] hover:text-[#cccccc]'}`}>CHAT</button>
+                <button onClick={() => setActivePanelTab('audit')} className={`flex-1 h-full flex items-center justify-center text-[10px] uppercase tracking-wider relative transition-colors whitespace-nowrap ${activePanelTab === 'audit' ? (theme === 'dark' ? 'text-white bg-[#252526] border-t-2 border-[#007acc]' : 'text-[#333333] bg-[#f3f3f3] border-t-2 border-[#007acc]') : 'text-[#858585] hover:text-[#cccccc]'}`}>AUDIT</button>
             </div>
 
             {activePanelTab === 'problem' && (

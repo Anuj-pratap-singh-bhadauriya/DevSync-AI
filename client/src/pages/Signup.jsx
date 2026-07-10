@@ -163,8 +163,8 @@ const Signup = () => {
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-gray-900 px-4">
-      <div className="w-full max-w-md bg-gray-800 rounded-xl shadow-lg p-8 relative overflow-hidden">
+    <div className="flex h-screen items-center justify-center bg-white px-4">
+      <div className="w-full max-w-md bg-white border border-gray-200 rounded-xl shadow-lg p-8 relative overflow-hidden">
 
         {/* Decorative gradient blur */}
         <div style={{
@@ -182,8 +182,8 @@ const Signup = () => {
         {step === 1 && (
           <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-white mb-2">Join DevSync AI 🚀</h1>
-              <p className="text-gray-400">Create an account to start collaborating.</p>
+              <h1 className="text-3xl font-bold text-black mb-2">Join DevSync AI 🚀</h1>
+              <p className="text-gray-800">Create an account to start collaborating.</p>
             </div>
 
             {error && (
@@ -198,19 +198,19 @@ const Signup = () => {
 
             <form onSubmit={handleSendOTP} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Full Name</label>
+                <label className="block text-sm font-medium text-black mb-1">Full Name</label>
                 <input
                   type="text" name="name" value={credentials.name} onChange={onChange}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-black focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                   placeholder="John Doe" required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Email Address</label>
+                <label className="block text-sm font-medium text-black mb-1">Email Address</label>
                 <input
                   type="email" name="email" value={credentials.email} onChange={onChange}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-black focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                   placeholder="you@gmail.com" required
                 />
                 <p style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>
@@ -219,10 +219,10 @@ const Signup = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Password</label>
+                <label className="block text-sm font-medium text-black mb-1">Password</label>
                 <input
                   type="password" name="password" value={credentials.password} onChange={onChange}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-black focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                   placeholder="••••••••" minLength={5} required
                 />
               </div>
@@ -247,7 +247,7 @@ const Signup = () => {
               </button>
             </form>
 
-            <p className="mt-6 text-center text-gray-400 text-sm">
+            <p className="mt-6 text-center text-gray-800 text-sm">
               Already have an account?{' '}
               <Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium">
                 Log in here
@@ -269,8 +269,8 @@ const Signup = () => {
               }}>
                 📩
               </div>
-              <h1 className="text-2xl font-bold text-white mb-2">Verify Your Email</h1>
-              <p className="text-gray-400 text-sm">
+              <h1 className="text-2xl font-bold text-black mb-2">Verify Your Email</h1>
+              <p className="text-gray-800 text-sm">
                 We sent a 6-digit code to<br />
                 <span style={{ color: '#60a5fa', fontWeight: '600' }}>{credentials.email}</span>
               </p>
@@ -314,9 +314,9 @@ const Signup = () => {
                     style={{
                       width: '48px', height: '56px', textAlign: 'center',
                       fontSize: '22px', fontWeight: '700', fontFamily: "'Courier New', monospace",
-                      background: digit ? 'rgba(59,130,246,0.15)' : '#374151',
-                      border: digit ? '2px solid #3b82f6' : '2px solid #4b5563',
-                      borderRadius: '12px', color: '#fff', outline: 'none',
+                      background: digit ? 'rgba(59,130,246,0.15)' : '#f9fafb',
+                      border: digit ? '2px solid #3b82f6' : '2px solid #d1d5db',
+                      borderRadius: '12px', color: '#111827', outline: 'none',
                       transition: 'all 0.2s ease',
                       caretColor: '#3b82f6'
                     }}

@@ -148,11 +148,11 @@ const Home = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#0f172a] text-white p-8 font-sans">
-            <div className="max-w-5xl mx-auto space-y-6">
+        <div className="min-h-screen bg-[#ffffff] text-[#000000] p-8 font-sans">
+            <div className="max-w-[1440px] w-full mx-auto space-y-8 px-2 sm:px-6 lg:px-8">
                 
                 {/* --- HEADER --- */}
-                <div className="flex justify-between items-center bg-[#1e293b] p-6 rounded-xl border border-gray-700 shadow-lg">
+                <div className="flex justify-between items-center bg-[#18181b] p-6 rounded-xl border border-[#27272a] shadow-lg">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight text-white">
                             Welcome, {localUser?.name?.split(' ')[0] || dynamicUser?.name?.split(' ')[0] || 'Developer'}
@@ -204,16 +204,17 @@ const Home = () => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* --- ACTION MODULE --- */}
-                    <div className="bg-[#1e293b] p-6 rounded-xl border border-blue-900/50 shadow-lg relative overflow-hidden flex flex-col justify-center h-full">
-                        <div className="absolute top-0 left-0 w-1 bg-blue-500 h-full"></div>
-                        <h2 className="text-lg font-bold mb-4 text-white">Deploy New Workspace</h2>
-                        <form onSubmit={handleInitializeWorkspace} className="flex gap-3">
+                    <div className="bg-[#18181b] p-6 rounded-xl border border-[#27272a] border-t-4 border-t-blue-500 shadow-lg relative overflow-hidden flex flex-col justify-between h-[180px] transition-transform hover:-translate-y-1">
+                        <div className="flex-1">
+                            <h2 className="text-lg font-bold mb-4 text-white">Deploy New Workspace</h2>
+                        </div>
+                        <form onSubmit={handleInitializeWorkspace} className="flex gap-3 mt-auto">
                             <input 
                                 type="text" 
                                 placeholder="Workspace title (e.g., App Core)"
                                 value={newWorkspaceTitle}
                                 onChange={(e) => setNewWorkspaceTitle(e.target.value)}
-                                className="flex-1 bg-[#0f172a] border border-gray-600 text-sm px-4 py-3 rounded-lg focus:outline-none focus:border-blue-500 text-white transition-colors"
+                                className="flex-1 bg-[#09090b] border border-[#3f3f46] text-sm px-4 py-3 rounded-lg focus:outline-none focus:border-blue-500 text-white transition-colors"
                             />
                             <button type="submit" className="px-6 py-3 font-bold text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors shadow-md">
                                 Initialize
@@ -222,16 +223,17 @@ const Home = () => {
                     </div>
 
                     {/* --- NAYA: ARENA PORTAL MODULE --- */}
-                    <div className="bg-[#1e293b] p-6 rounded-xl border border-purple-900/50 shadow-lg relative overflow-hidden flex flex-col justify-center h-full">
-                        <div className="absolute top-0 left-0 w-1 bg-purple-500 h-full"></div>
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-lg font-bold text-white">Coding Arena</h2>
-                            <span className="text-[10px] px-2 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-full font-mono">Practice</span>
+                    <div className="bg-[#18181b] p-6 rounded-xl border border-[#27272a] border-t-4 border-t-purple-500 shadow-lg relative overflow-hidden flex flex-col justify-between h-[180px] transition-transform hover:-translate-y-1">
+                        <div className="flex-1">
+                            <div className="flex justify-between items-start mb-2">
+                                <h2 className="text-lg font-bold text-white">Coding Arena</h2>
+                                <span className="text-[10px] px-2 py-0.5 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-full font-mono">Practice</span>
+                            </div>
+                            <p className="text-sm text-gray-400">Solve algorithmic challenges in a secure automated sandbox environment.</p>
                         </div>
-                        <p className="text-sm text-gray-400 mb-4">Solve algorithmic challenges in a secure automated sandbox environment.</p>
                         <button 
                             onClick={() => navigate("/arena")} 
-                            className="w-full py-3 font-bold text-sm bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors shadow-md border border-purple-500"
+                            className="w-full py-3 font-bold text-sm bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors shadow-md mt-auto"
                         >
                             Enter Problem Arena →
                         </button>
@@ -240,17 +242,17 @@ const Home = () => {
 
                 {/* --- TELEMETRY ROW --- */}
                 <div className="grid grid-cols-3 gap-6">
-                    <div className="bg-[#1e293b] p-6 rounded-xl border border-gray-700 shadow-md">
+                    <div className="bg-[#18181b] p-6 rounded-xl border border-[#27272a] border-t-2 border-t-emerald-500 shadow-sm transition-transform hover:-translate-y-1 flex flex-col justify-center h-[120px]">
                         <p className="text-sm text-gray-400 font-medium mb-1">Deployed Environments</p>
-                        <p className="text-2xl font-bold text-blue-400">{isLoading ? "..." : projects.length} Active</p>
+                        <p className="text-2xl font-bold text-emerald-400">{isLoading ? "..." : projects.length} Active</p>
                     </div>
-                    <div className="bg-[#1e293b] p-6 rounded-xl border border-gray-700 shadow-md overflow-hidden">
+                    <div className="bg-[#18181b] p-6 rounded-xl border border-[#27272a] border-t-2 border-t-amber-500 shadow-sm transition-transform hover:-translate-y-1 flex flex-col justify-center h-[120px] overflow-hidden">
                         <p className="text-sm text-gray-400 font-medium mb-1">Registered Identity</p>
-                        <p className="text-sm font-mono mt-2 truncate text-gray-300" title={dynamicUser?.email}>
+                        <p className="text-sm font-mono mt-1 truncate text-amber-300" title={dynamicUser?.email}>
                             {dynamicUser?.email || "Fetching Identity..."}
                         </p>
                     </div>
-                    <div className="bg-[#1e293b] p-6 rounded-xl border border-gray-700 shadow-md flex flex-col justify-center">
+                    <div className="bg-[#18181b] p-6 rounded-xl border border-[#27272a] border-t-2 border-t-pink-500 shadow-sm transition-transform hover:-translate-y-1 flex flex-col justify-center h-[120px]">
                         <p className="text-sm text-gray-400 font-medium mb-2">Network Infrastructure</p>
                         <div className="flex items-center gap-2">
                             <span className="relative flex h-3 w-3">
@@ -265,16 +267,16 @@ const Home = () => {
                 </div>
 
                 {/* --- DIRECTORY --- */}
-                <div className="bg-[#1e293b] p-6 rounded-xl border border-gray-700 shadow-lg min-h-[300px]">
-                    <h2 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">
+                <div className="mt-8">
+                    <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-black">
                         <span>Workspace Directory</span>
-                        {isLoading && <span className="text-xs text-blue-400 animate-pulse font-mono font-medium ml-2">(Syncing with database...)</span>}
+                        {isLoading && <span className="text-xs text-blue-500 animate-pulse font-mono font-medium ml-2">(Syncing with database...)</span>}
                     </h2>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {projects.length === 0 && !isLoading ? (
-                            <div className="col-span-2 text-center py-12 border border-dashed border-gray-600 rounded-xl text-gray-500 bg-[#0f172a]/50">
-                                <p className="text-lg mb-1">No active workspaces found.</p>
+                            <div className="col-span-full text-center py-12 border border-dashed border-gray-300 rounded-xl text-gray-500 bg-gray-50">
+                                <p className="text-lg mb-1 font-semibold text-gray-700">No active workspaces found.</p>
                                 <p className="text-sm">Initialize a new environment above to get started.</p>
                             </div>
                         ) : (
@@ -285,7 +287,7 @@ const Home = () => {
                                     <div 
                                         key={project.id} 
                                         onClick={() => navigate(`/workspace/${project.id}`)} 
-                                        className="bg-[#0f172a] p-5 rounded-xl border border-gray-700 hover:border-blue-500 cursor-pointer transition-all group relative overflow-hidden shadow-sm hover:shadow-blue-900/20 flex flex-col justify-between h-[140px]"
+                                        className="bg-[#18181b] p-5 rounded-xl border border-[#3f3f46] hover:border-blue-500 cursor-pointer transition-all group relative overflow-hidden shadow-md hover:shadow-[0_10px_30px_rgba(59,130,246,0.15)] flex flex-col justify-between h-[140px]"
                                     >
                                         <div>
                                             <div className="flex justify-between items-start mb-2">

@@ -24,7 +24,7 @@ const VideoCall = ({ socket, roomId, userEmail, onClose }) => {
 
   // Fetch TURN credentials securely from backend
   const fetchTurnCredentials = async () => {
-    const token = localStorage.getItem('auth-token');
+    const token = localStorage.getItem('authToken');
     if (!token) return FALLBACK_ICE;
     try {
       const res = await axios.get(import.meta.env.VITE_BACKEND_URL + '/api/turn-credentials', { headers: { 'auth-token': token }, timeout: 10000 });

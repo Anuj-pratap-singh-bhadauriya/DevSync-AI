@@ -1,27 +1,20 @@
-<div align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0b1120&height=200&section=header&text=DevSync%20AI&fontSize=70&fontAlignY=35&desc=Real-Time%20Collaborative%20IDE%20%26%20AI-Powered%20Coding%20Platform&descAlignY=55&descAlign=50" alt="DevSync AI Banner" />
-</div>
+![DevSync AI Banner](https://capsule-render.vercel.app/api?type=waving&color=0b1120&height=200&section=header&text=DevSync%20AI&fontSize=70&fontAlignY=35&desc=Real-Time%20Collaborative%20IDE%20%26%20AI-Powered%20Coding%20Platform&descAlignY=55&descAlign=50)
 
-<p align="center">
-  <a href="#features"><img src="https://img.shields.io/badge/Features-Explore-blue?style=for-the-badge&logo=rocket" alt="Features"></a>
-  <a href="#tech-stack"><img src="https://img.shields.io/badge/Tech_Stack-MERN_%2B_WebRTC-purple?style=for-the-badge&logo=react" alt="Tech Stack"></a>
-  <a href="#architecture"><img src="https://img.shields.io/badge/Architecture-View-green?style=for-the-badge&logo=diagrams.net" alt="Architecture"></a>
-  <a href="#installation"><img src="https://img.shields.io/badge/Setup-Local_Dev-orange?style=for-the-badge&logo=gear" alt="Setup"></a>
-</p>
+[![Features](https://img.shields.io/badge/Features-Explore-blue?style=for-the-badge&logo=rocket)](#core-features-deep-dive)
+[![Tech Stack](https://img.shields.io/badge/Tech_Stack-MERN_%2B_WebRTC-purple?style=for-the-badge&logo=react)](#tech-stack)
+[![Architecture](https://img.shields.io/badge/Architecture-View-green?style=for-the-badge&logo=diagrams.net)](#system-architecture)
+[![Setup](https://img.shields.io/badge/Setup-Local_Dev-orange?style=for-the-badge&logo=gear)](#local-development-setup)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
-  <img src="https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js" />
-  <img src="https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white" alt="Express" />
-  <img src="https://img.shields.io/badge/Socket.io-010101?style=for-the-badge&logo=socketdotio&logoColor=white" alt="Socket.io" />
-  <img src="https://img.shields.io/badge/WebRTC-333333?style=for-the-badge&logo=webrtc&logoColor=white" alt="WebRTC" />
-  <br/>
-  <img src="https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
-  <img src="https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB" />
-  <img src="https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white" alt="Prisma" />
-  <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
-  <img src="https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white" alt="OpenAI" />
-</p>
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Express.js](https://img.shields.io/badge/Express.js-000000?style=for-the-badge&logo=express&logoColor=white)
+![Socket.io](https://img.shields.io/badge/Socket.io-010101?style=for-the-badge&logo=socketdotio&logoColor=white)
+![WebRTC](https://img.shields.io/badge/WebRTC-333333?style=for-the-badge&logo=webrtc&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
 
 ---
 

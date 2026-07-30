@@ -84,19 +84,26 @@ It combines the aesthetic and power of professional IDEs with real-time multipla
 
 ```mermaid
 graph TD
-    Client[React Frontend] <-->|REST API| Express[Express Backend]
-    Client <-->|Socket.io| SocketServer[Real-Time Hub]
+    Client[React Frontend] <-->|REST API| Routes[Routes Layer]
+    Client <-->|Socket.io| Sockets[Socket Handlers]
     Client <-->|WebRTC| Peers[Other Clients]
-    
-    Express <-->|Prisma ORM| Postgres[(PostgreSQL)]
-    Express <-->|Mongoose| Mongo[(MongoDB)]
-    
-    Express -->|HTTP API| Brevo[Brevo Email API]
-    Express -->|REST API| OpenAI[OpenAI Engine]
-    Express -->|GraphQL Proxy| LeetCode[LeetCode API]
-    
-    SocketServer -->|In-Memory| ActiveState{Workspace State}
-    ActiveState -.->|Auto-Save on Empty| Postgres
+
+    Routes --> Controllers[Controllers Layer]
+    Controllers <-->|Prisma ORM| Postgres[(PostgreSQL)]
+    Controllers <-->|Mongoose| Mongo[(MongoDB)]
+    Controllers -->|HTTP API| Brevo[Brevo Email API]
+    Controllers -->|REST API| OpenAI[OpenAI Engine]
+    Controllers -->|GraphQL Proxy| LeetCode[LeetCode API]
+
+    Sockets -->|In-Memory| Store[Memory Store]
+    Store -.->|Auto-Save on Empty| Postgres
+
+    subgraph Backend Architecture
+        Routes
+        Controllers
+        Sockets
+        Store
+    end
 ```
 
 ---
@@ -118,23 +125,70 @@ To maximize performance and scalability, DevSync AI implements a dual-database a
 
 ```text
 DevSync-AI/
-├── client/                     # React Frontend (Vite)
+├── client/                        # React Frontend (Vite)
 │   ├── src/
-│   │   ├── components/         # Reusable UI components & WebRTC module
-│   │   ├── pages/              # Main routes (Home, Workspace, Arena, Auth)
-│   │   ├── redux/              # Global state management (Auth Slice)
-│   │   ├── App.jsx             # React Router configuration
-│   │   └── main.jsx            # Entry point
+│   │   ├── components/            # Reusable UI components & WebRTC module
+│   │   ├── pages/                 # Main routes (Home, Workspace, Arena, Auth)
+│   │   ├── redux/                 # Global state management (Auth Slice)
+│   │   ├── App.jsx                # React Router configuration
+│   │   └── main.jsx               # Entry point
 │   ├── index.html
 │   └── tailwind.config.js
 │
-└── backend/                    # Node.js + Express Backend
-    ├── lib/                    # Prisma Singleton connection
-    ├── middleware/             # JWT Auth & RBAC Checkers
-    ├── models/                 # MongoDB Mongoose schemas
-    ├── prisma/                 # PostgreSQL schema & migrations
-    ├── emailService.js         # Brevo API integration
-    └── server.js               # Main HTTP/Socket/API engine
+└── backend/                       # Node.js + Express Backend
+    ├── server.js                  # Slim entry — HTTP server, Socket.io init, DB connect
+    ├── app.js                     # Express app config, middleware, route mounting
+    ├── emailService.js            # Brevo API integration
+    │
+    ├── config/                    # Configuration modules
+    │   ├── cors.js                #   Allowed origins & CORS options
+    │   ├── rateLimiters.js        #   Global, OTP, LeetCode rate limiters
+    │   └── openai.js              #   OpenAI client initialization
+    │
+    ├── routes/                    # Express Router definitions (thin)
+    │   ├── auth.routes.js         #   OTP, login, password reset
+    │   ├── project.routes.js      #   Workspace CRUD & member management
+    │   ├── invitation.routes.js   #   Invitation flow (invite/approve/accept)
+    │   ├── chat.routes.js         #   Chat history & activity logs
+    │   ├── ai.routes.js           #   AI audit, chat, execute
+    │   ├── leetcode.routes.js     #   LeetCode GraphQL proxy
+    │   └── misc.routes.js         #   Health check & TURN credentials
+    │
+    ├── controllers/               # Business logic handlers
+    │   ├── auth.controller.js
+    │   ├── project.controller.js
+    │   ├── invitation.controller.js
+    │   ├── chat.controller.js
+    │   ├── ai.controller.js
+    │   ├── leetcode.controller.js
+    │   └── misc.controller.js
+    │
+    ├── sockets/                   # Socket.io event handlers
+    │   ├── index.js               #   Auth middleware & handler registration
+    │   ├── room.handler.js        #   join-room, code-change, disconnect
+    │   ├── chat.handler.js        #   Team messages & activity logging
+    │   ├── interview.handler.js   #   Interview timer management
+    │   └── webrtc.handler.js      #   WebRTC signaling relay
+    │
+    ├── store/                     # In-memory state management
+    │   └── memoryStore.js         #   OTP stores, room users, workspace state
+    │
+    ├── utils/                     # Shared utility functions
+    │   └── helpers.js             #   OTP generation, socket helpers
+    │
+    ├── middleware/                # Auth & access control
+    │   ├── fetchuser.js           #   JWT verification
+    │   └── checkMembership.js     #   Workspace membership guard
+    │
+    ├── models/                    # MongoDB Mongoose schemas
+    │   ├── Chat.js
+    │   └── ActivityLog.js
+    │
+    ├── lib/                       # Database clients
+    │   └── prisma.js              #   Prisma singleton
+    │
+    └── prisma/                    # PostgreSQL schema & migrations
+        └── schema.prisma
 ```
 
 ---
@@ -229,7 +283,7 @@ The application will be running at `http://localhost:5173`.
 2. Configure the build command: `npm install && npx prisma generate`
 3. Configure the start command: `node server.js`
 4. Ensure all environment variables (PostgreSQL, MongoDB, APIs) are injected.
-5. The Brevo HTTP API is explicitly used over SMTP (Nodemailer) to prevent issues with Render's SMTP port restrictions.
+5. The Brevo HTTP API is used for email delivery to prevent issues with Render's SMTP port restrictions.
 
 ---
 

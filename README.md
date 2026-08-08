@@ -14,7 +14,7 @@
 ![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
-![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
+![Google Gemini](https://img.shields.io/badge/Google_Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)
 
 ---
 
@@ -92,7 +92,7 @@ graph TD
     Controllers <-->|Prisma ORM| Postgres[(PostgreSQL)]
     Controllers <-->|Mongoose| Mongo[(MongoDB)]
     Controllers -->|HTTP API| Brevo[Brevo Email API]
-    Controllers -->|REST API| OpenAI[OpenAI Engine]
+    Controllers -->|REST API| Gemini[Google Gemini AI]
     Controllers -->|GraphQL Proxy| LeetCode[LeetCode API]
 
     Sockets -->|In-Memory| Store[Memory Store]
@@ -199,7 +199,7 @@ DevSync-AI/
 * Node.js (v18+)
 * PostgreSQL instance
 * MongoDB instance
-* OpenAI API Key (or Azure GitHub Token)
+* Google AI Studio API Key (free — [aistudio.google.com](https://aistudio.google.com))
 * Brevo API Key (for email services)
 
 ### 2. Clone the Repository
@@ -257,7 +257,7 @@ The application will be running at `http://localhost:5173`.
 | `JWT_SECRET` | Secret key for signing JSON Web Tokens | `your_secure_random_string` |
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/db` |
 | `MONGO_URI` | MongoDB connection string | `mongodb://localhost:27017/devsync` |
-| `GITHUB_TOKEN` | OpenAI/Azure API Key for Copilot & Execution | `ghp_xxxxxxxxxxxx` |
+| `GEMINI_API_KEY` | Google AI Studio API Key for Copilot & Execution (free tier available) | `AIzaSy_xxxxxxxxxxxx` |
 | `BREVO_API_KEY` | API Key for Brevo to send OTP emails | `xkeysib-xxxxxxxxxxxx` |
 | `EMAIL_USER` | Verified sender email in Brevo | `hello@devsync.com` |
 | `TURN_USERNAME` | Username for Metered TURN server (WebRTC) | `your_turn_user` |

@@ -696,7 +696,7 @@ const Workspace = () => {
     chatHistory.push({ role: "user", content: query });
 
     try {
-      const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/chat", { promptMessage: query, history: chatHistory, codeBuffer: activeFile?.content || "" }, { headers: { "auth-token": token } });
+      const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/chat", { history: chatHistory, codeBuffer: activeFile?.content || "" }, { headers: { "auth-token": token } });
       setCopilotLogs(prev => [...prev, `> [AI]: ${res.data.reply}`]);
     } catch (err) {
       setCopilotLogs(prev => [...prev, `> [SYSTEM ERROR] AI Copilot failed to respond.`]);

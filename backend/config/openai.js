@@ -1,8 +1,8 @@
 const { OpenAI } = require('openai');
 
 const client = new OpenAI({
-    baseURL: "https://models.inference.ai.azure.com",
-    apiKey: process.env.GITHUB_TOKEN
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+    apiKey: process.env.GEMINI_API_KEY
 });
 
 module.exports = client;

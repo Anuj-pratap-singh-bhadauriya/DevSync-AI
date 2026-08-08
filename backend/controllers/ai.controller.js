@@ -4,7 +4,7 @@ exports.audit = async (req, res) => {
     try {
         const response = await client.chat.completions.create({
             messages: [{ role: "system", content: "Analyze code, identify bugs, return plain text log." }, { role: "user", content: req.body.codeBuffer }],
-            model: "gpt-4o-mini", temperature: 0.1, max_tokens: 150
+            model: "gemini-3.6-flash", temperature: 0.1, max_tokens: 150
         });
         res.json({ auditLog: response.choices[0].message.content });
     } catch (error) { res.json({ auditLog: `> [SYSTEM ERROR] AI failure.` }); }
@@ -29,7 +29,7 @@ exports.chat = async (req, res) => {
 
         const response = await client.chat.completions.create({
             messages: apiMessages,
-            model: "gpt-4o-mini", temperature: 0.5, max_tokens: 300
+            model: "gemini-3.6-flash", temperature: 0.5, max_tokens: 2048
         });
         res.json({ reply: response.choices[0].message.content });
     } catch (error) { res.json({ reply: `[SYSTEM EXCEPTION] AI failure.` }); }
@@ -55,7 +55,7 @@ exports.execute = async (req, res) => {
                     content: userContent
                 }
             ],
-            model: "gpt-4o-mini",
+            model: "gemini-3.6-flash",
             temperature: 0.0,
             max_tokens: 500
         });

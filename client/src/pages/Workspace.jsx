@@ -738,9 +738,14 @@ const Workspace = () => {
 
   const handleRemoveMember = async (memberId) => {
       try {
+          const myId = currentUser?.id || currentUser?._id || user?.id || user?.userId;
+          const isSelf = memberId === myId;
           await axios.delete(import.meta.env.VITE_BACKEND_URL + `/api/projects/${id}/members/${memberId}`, { headers: { "auth-token": token } });
           setWorkspaceData(prev => ({ ...prev, members: prev.members.filter(m => m.userId !== memberId) }));
-          addToast("Member removed successfully.", "success");
+          // Skip toast on self-leave — the kicked-out socket event already shows the message and redirects
+          if (!isSelf) {
+              addToast("Member removed successfully.", "success");
+          }
       } catch (err) {
           addToast(err.response?.data?.error || "Failed to remove member.", "error");
       }

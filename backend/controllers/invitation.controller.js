@@ -12,8 +12,8 @@ exports.invite = async (req, res) => {
         const isOwner = project.ownerId === req.user.userId;
         const inviteStatus = isOwner ? 'PENDING' : 'REQUESTED_BY_COLLAB';
 
-        // Role to assign on acceptance — only owner can set VIEWER
-        const invitedRole = (isOwner && req.body.invitedRole === 'VIEWER') ? 'VIEWER' : 'COLLABORATOR';
+        // Any member can suggest VIEWER or COLLABORATOR role — owner has final say on approval
+        const invitedRole = req.body.invitedRole === 'VIEWER' ? 'VIEWER' : 'COLLABORATOR';
 
         const existingMember = await prisma.workspaceMember.findUnique({
             where: { workspaceId_userId: { workspaceId: req.params.id, userId: targetUser.id } }

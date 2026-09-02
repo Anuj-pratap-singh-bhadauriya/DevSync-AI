@@ -884,6 +884,23 @@ const Workspace = () => {
             <span className="hidden lg:inline">{saveStatus}</span><span className="lg:hidden">💾</span>
           </button>
 
+          {/* Leave Workspace — only for VIEWER */}
+          {userRole === 'VIEWER' && (
+            <button
+              onClick={async () => {
+                const myId = currentUser?.id || currentUser?._id || user?.id || user?.userId;
+                if (window.confirm("Leave this workspace? You will lose access.")) {
+                  await handleRemoveMember(myId);
+                  navigate("/dashboard");
+                }
+              }}
+              title="Leave Workspace"
+              className="px-2 py-1 rounded-sm font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 bg-red-600/80 hover:bg-red-600 text-white transition-colors"
+            >
+              <span>🚪</span><span className="hidden lg:inline">Leave</span>
+            </button>
+          )}
+
           {/* Dashboard */}
           <button onClick={() => navigate("/dashboard")} title="Dashboard" className={`px-2 py-1 rounded-sm font-medium text-[10px] uppercase tracking-wider flex items-center gap-1 ${theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]'}`}>
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>

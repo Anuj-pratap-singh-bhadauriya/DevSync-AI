@@ -859,8 +859,8 @@ const Workspace = () => {
             <span>{showVideoCall ? '📞' : '📹'}</span><span className="hidden lg:inline">{showVideoCall ? 'End Call' : 'Start Call'}</span>
           </button>
           
-          {/* Interview */}
-          {!isInterviewMode ? (
+          {/* Interview — hidden for VIEWER */}
+          {userRole !== 'VIEWER' && (!isInterviewMode ? (
               <button onClick={handleStartInterview} title="Start Interview" className={`px-2 py-1 rounded-sm font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 ${theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]'}`}>
                 <span>🎤</span><span className="hidden xl:inline">Start 45m Interview</span><span className="hidden lg:inline xl:hidden">Interview</span>
               </button>
@@ -868,7 +868,7 @@ const Workspace = () => {
               <button onClick={handleEndInterview} title="End Interview" className="px-2 py-1 rounded-sm font-bold text-[10px] uppercase tracking-wider bg-[#d16969] text-white hover:bg-[#c15959] flex items-center gap-1">
                 <span>⏹</span><span className="hidden lg:inline">End Interview</span>
               </button>
-          )}
+          ))}
 
           {/* Theme Toggle */}
           <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title="Toggle Theme" className={`flex items-center justify-center p-1 rounded-sm w-6 h-6 transition-colors ${theme === 'dark' ? 'hover:bg-[#464646] text-[#cccccc]' : 'hover:bg-[#d4d4d4] text-[#333333]'}`}>

@@ -7,9 +7,13 @@ exports.invite = async (req, res) => {
         if (!targetUser) return res.status(404).json({ error: "User not found. They must have a DevSync account first." });
         if (targetUser.id === req.user.userId) return res.status(400).json({ error: "You cannot invite yourself." });
 
+        // Only OWNER can invite as VIEWER; collaborators always invite as COLLABORATOR
         const project = await prisma.project.findUnique({ where: { id: req.params.id } });
         const isOwner = project.ownerId === req.user.userId;
         const inviteStatus = isOwner ? 'PENDING' : 'REQUESTED_BY_COLLAB';
+
+        // Role to assign on acceptance — only owner can set VIEWER
+        const invitedRole = (isOwner && req.body.invitedRole === 'VIEWER') ? 'VIEWER' : 'COLLABORATOR';
 
         const existingMember = await prisma.workspaceMember.findUnique({
             where: { workspaceId_userId: { workspaceId: req.params.id, userId: targetUser.id } }
@@ -30,7 +34,8 @@ exports.invite = async (req, res) => {
                 workspaceId: req.params.id,
                 senderId: req.user.userId,
                 receiverId: targetUser.id,
-                status: inviteStatus
+                status: inviteStatus,
+                invitedRole
             },
             include: { workspace: { select: { title: true } }, sender: { select: { name: true, email: true } }, receiver: { select: { name: true, email: true } } }
         });
@@ -48,6 +53,7 @@ exports.invite = async (req, res) => {
         res.status(500).json({ error: "Server error." });
     }
 };
+
 
 exports.getRequests = async (req, res) => {
     try {
@@ -118,7 +124,7 @@ exports.accept = async (req, res) => {
         if (invitation.status !== 'PENDING') return res.status(400).json({ error: "Invitation already processed." });
 
         await prisma.workspaceMember.create({
-            data: { workspaceId: invitation.workspaceId, userId: req.user.userId, role: 'COLLABORATOR' }
+            data: { workspaceId: invitation.workspaceId, userId: req.user.userId, role: invitation.invitedRole || 'COLLABORATOR' }
         });
 
         await prisma.invitation.update({ where: { id: req.params.id }, data: { status: 'ACCEPTED' } });
@@ -127,7 +133,7 @@ exports.accept = async (req, res) => {
             id: 'temp-' + Date.now(),
             userId: invitation.receiver.id,
             workspaceId: invitation.workspaceId,
-            role: 'COLLABORATOR',
+            role: invitation.invitedRole || 'COLLABORATOR',
             user: { id: invitation.receiver.id, name: invitation.receiver.name, email: invitation.receiver.email }
         };
 

@@ -19,11 +19,14 @@ const checkMembership = async (req, res, next) => {
         }
 
         const isOwner = project.ownerId === userId;
-        const isMember = project.members.some(member => member.userId === userId);
+        const member = project.members.find(m => m.userId === userId);
 
-        if (!isOwner && !isMember) {
+        if (!isOwner && !member) {
             return res.status(403).json({ error: "Access denied. You are not a member of this workspace." });
         }
+
+        // Attach role to request for downstream use
+        req.userRole = isOwner ? 'OWNER' : member.role;
 
         next();
     } catch (error) {

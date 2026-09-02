@@ -11,20 +11,29 @@ module.exports = (io, socket) => {
             if (!project) return socket.emit('error', 'Workspace not found');
 
             const isOwner = project.ownerId === socket.user.userId;
-            const isMember = project.members.some(m => m.userId === socket.user.userId);
+            const member = project.members.find(m => m.userId === socket.user.userId);
 
-            if (!isOwner && !isMember) {
+            if (!isOwner && !member) {
                 return socket.emit('error', 'Access denied to this workspace');
             }
+
+            // Determine and store this socket's role
+            const userRole = isOwner ? 'OWNER' : (member?.role || 'COLLABORATOR');
+            socket.userRole = userRole;
 
             socket.join(roomId);
             socket.roomId = roomId;
             socket.userEmail = userEmail || 'Anonymous';
             socket.userName = userName || userEmail || 'Anonymous';
 
-            // Track user in room
+            // Track user in room (include role so frontend can display it)
             if (!roomUsers.has(roomId)) roomUsers.set(roomId, new Map());
-            roomUsers.get(roomId).set(socket.id, { socketId: socket.id, email: socket.userEmail, name: socket.userName });
+            roomUsers.get(roomId).set(socket.id, {
+                socketId: socket.id,
+                email: socket.userEmail,
+                name: socket.userName,
+                role: userRole
+            });
 
             // Ensure workspace state exists
             if (!activeWorkspaces.has(roomId)) {
@@ -45,14 +54,15 @@ module.exports = (io, socket) => {
                 });
             }
 
-            // Sync state to the newly joined user
+            // Sync state to the newly joined user — also send their role
             const currentState = activeWorkspaces.get(roomId);
             socket.emit('workspace-state-sync', {
                 files: currentState.files,
                 activeFileName: currentState.activeFileName,
                 interviewEndTime: currentState.interviewEndTime,
                 videoParticipants: Array.from(currentState.videoParticipants),
-                arenaProblem: currentState.arenaProblem || null
+                arenaProblem: currentState.arenaProblem || null,
+                userRole  // Send role to client on join
             });
 
             // Broadcast updated user list
@@ -64,6 +74,9 @@ module.exports = (io, socket) => {
     });
 
     socket.on('code-change', (data) => {
+        // VIEWER cannot edit code
+        if (socket.userRole === 'VIEWER') return;
+
         const state = activeWorkspaces.get(data.roomId);
         if (state) {
             const file = state.files.find(f => f.name === data.fileName);
@@ -73,6 +86,9 @@ module.exports = (io, socket) => {
     });
 
     socket.on('file-structure-change', (data) => {
+        // VIEWER cannot add/delete/rename files
+        if (socket.userRole === 'VIEWER') return;
+
         const state = activeWorkspaces.get(data.roomId);
         if (state) {
             state.files = data.files;

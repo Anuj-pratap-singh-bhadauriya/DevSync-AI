@@ -114,6 +114,8 @@ model Invitation {
   receiverId  String
   receiver    User             @relation("ReceivedInvitations", fields: [receiverId], references: [id])
   status      InvitationStatus @default(PENDING)
+  // Role the invitee will get on acceptance — COLLABORATOR (default) or VIEWER
+  invitedRole WorkspaceRole    @default(COLLABORATOR)
   createdAt   DateTime         @default(now())
 
   // Ensure a user can only be invited to the same workspace once

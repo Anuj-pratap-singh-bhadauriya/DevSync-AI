@@ -30,6 +30,8 @@ const Workspace = () => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showVideoCall, setShowVideoCall] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("COLLABORATOR"); // COLLABORATOR or VIEWER
+  const [userRole, setUserRole] = useState("COLLABORATOR"); // This user's role in this workspace
 
   const [files, setFiles] = useState([{ name: "index.js", language: "javascript", content: "// Initialize enterprise workspace...\n" }]);
   const [activeFileName, setActiveFileName] = useState("index.js");
@@ -458,6 +460,10 @@ const Workspace = () => {
         if (state.videoParticipants && state.videoParticipants.length > 0) {
             setShowVideoCall(true);
         }
+        // Set this user's role (OWNER / COLLABORATOR / VIEWER)
+        if (state.userRole) {
+            setUserRole(state.userRole);
+        }
     });
 
     socketRef.current.on('invite-approval-request', (invitation) => {
@@ -744,9 +750,9 @@ const Workspace = () => {
     e.preventDefault();
     if(!inviteEmail.trim()) return;
     try {
-        await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id + "/invite", { targetEmail: inviteEmail }, { headers: { "auth-token": token } });
-        setShowInviteModal(false); setInviteEmail("");
-        recordActivity(`Dispatched workspace invitation to ${inviteEmail}`);
+        await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/projects/" + id + "/invite", { targetEmail: inviteEmail, invitedRole: inviteRole }, { headers: { "auth-token": token } });
+        setShowInviteModal(false); setInviteEmail(""); setInviteRole("COLLABORATOR");
+        recordActivity(`Dispatched workspace invitation to ${inviteEmail} as ${inviteRole}`);
         addToast("✅ Invitation sent! Waiting for them to accept.", "success");
     } catch (err) { 
         addToast(err.response?.data?.error || "Error: Failed to send invitation.", "error"); 
@@ -820,6 +826,12 @@ const Workspace = () => {
                     ))}
                 </select>
             </div>
+            {/* VIEWER badge */}
+            {userRole === 'VIEWER' && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 bg-yellow-600 text-white rounded-sm tracking-widest uppercase">
+                View Only
+              </span>
+            )}
           </div>
           <h1 className="text-sm font-bold mt-0.5 tracking-tight truncate max-w-[180px]">{workspaceData ? workspaceData.title : "Workspace"}</h1>
         </div>
@@ -830,10 +842,12 @@ const Workspace = () => {
             <span>🏟️</span><span className="hidden lg:inline">Arena</span>
           </button>
           
-          {/* Invite */}
-          <button onClick={() => setShowInviteModal(true)} title="Invite" className={`px-2 py-1 rounded-sm font-medium text-[10px] uppercase tracking-wider flex items-center gap-1 ${theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]'}`}>
-            <span>👥</span><span className="hidden lg:inline">Invite</span>
-          </button>
+          {/* Invite — hidden for VIEWER */}
+          {userRole !== 'VIEWER' && (
+            <button onClick={() => setShowInviteModal(true)} title="Invite" className={`px-2 py-1 rounded-sm font-medium text-[10px] uppercase tracking-wider flex items-center gap-1 ${theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]'}`}>
+              <span>👥</span><span className="hidden lg:inline">Invite</span>
+            </button>
+          )}
           
           {/* Video Call */}
           <button onClick={() => setShowVideoCall(!showVideoCall)} title={showVideoCall ? 'End Call' : 'Start Call'} className={`px-2 py-1 rounded-sm font-bold text-[10px] uppercase tracking-wider transition-colors flex items-center gap-1 ${showVideoCall ? 'bg-[#d16969] text-white hover:bg-[#c15959]' : (theme === 'dark' ? 'bg-[#3c3c3c] hover:bg-[#464646] text-[#cccccc]' : 'bg-[#e4e4e4] hover:bg-[#d4d4d4] text-[#333333]')}`}>
@@ -889,20 +903,26 @@ const Workspace = () => {
               
               {!showArena ? (
                 <>
-                  <form onSubmit={handleCreateFile} className="mb-2 px-4 flex flex-col gap-1 shrink-0">
-                    <input type="text" placeholder="filename.js" value={newFileNameInput} onChange={(e) => setNewFileNameInput(e.target.value)} className={`text-[11px] px-2 py-1 border rounded-sm focus:outline-none focus:border-[#007acc] ${theme === 'dark' ? 'bg-[#3c3c3c] border-[#3c3c3c] text-white' : 'bg-white border-[#cccccc]'}`} />
-                    <div className="flex gap-1">
-                      <select value={newFileLanguage} onChange={(e) => setNewFileLanguage(e.target.value)} className={`text-[10px] border rounded-sm px-1 py-0.5 flex-1 outline-none cursor-pointer ${theme === 'dark' ? 'bg-[#3c3c3c] border-[#3c3c3c] text-white' : 'bg-white border-[#cccccc]'}`}>
-                        {languageOptions}
-                      </select>
-                      <button type="submit" className="bg-[#007acc] hover:bg-[#0062a3] text-white text-[10px] px-2 py-0.5 rounded-sm">+</button>
-                    </div>
-                  </form>
+                  {/* File creation form — hidden for VIEWER */}
+                  {userRole !== 'VIEWER' && (
+                    <form onSubmit={handleCreateFile} className="mb-2 px-4 flex flex-col gap-1 shrink-0">
+                      <input type="text" placeholder="filename.js" value={newFileNameInput} onChange={(e) => setNewFileNameInput(e.target.value)} className={`text-[11px] px-2 py-1 border rounded-sm focus:outline-none focus:border-[#007acc] ${theme === 'dark' ? 'bg-[#3c3c3c] border-[#3c3c3c] text-white' : 'bg-white border-[#cccccc]'}`} />
+                      <div className="flex gap-1">
+                        <select value={newFileLanguage} onChange={(e) => setNewFileLanguage(e.target.value)} className={`text-[10px] border rounded-sm px-1 py-0.5 flex-1 outline-none cursor-pointer ${theme === 'dark' ? 'bg-[#3c3c3c] border-[#3c3c3c] text-white' : 'bg-white border-[#cccccc]'}`}>
+                          {languageOptions}
+                        </select>
+                        <button type="submit" className="bg-[#007acc] hover:bg-[#0062a3] text-white text-[10px] px-2 py-0.5 rounded-sm">+</button>
+                      </div>
+                    </form>
+                  )}
                   <div className="flex-1 overflow-y-auto flex flex-col">
                     {files.map((f) => (
                         <div key={f.name} onClick={() => handleFileClick(f.name)} className={`group px-4 py-1 flex justify-between items-center cursor-pointer transition-colors ${f.name === activeFileName ? (theme === 'dark' ? 'bg-[#37373d] text-white' : 'bg-[#e4e6f1] text-[#333333]') : (theme === 'dark' ? 'text-[#cccccc] hover:bg-[#2a2d2e]' : 'text-[#616161] hover:bg-[#e8e8e8]')}`}>
                           <div className="flex items-center gap-2 overflow-hidden"><span className="text-[11px] font-mono truncate">{f.name}</span></div>
-                          <button onClick={(e) => handleDeleteFile(f.name, e)} className="text-gray-500 hover:text-red-500 text-[10px] font-bold opacity-0 group-hover:opacity-100">✕</button>
+                          {/* Delete button hidden for VIEWER */}
+                          {userRole !== 'VIEWER' && (
+                            <button onClick={(e) => handleDeleteFile(f.name, e)} className="text-gray-500 hover:text-red-500 text-[10px] font-bold opacity-0 group-hover:opacity-100">✕</button>
+                          )}
                         </div>
                     ))}
                   </div>
@@ -973,7 +993,9 @@ const Workspace = () => {
                           fontSize: 14, 
                           wordWrap: "on",
                           renderValidationDecorations: "on",
-                          automaticLayout: true
+                          automaticLayout: true,
+                          readOnly: userRole === 'VIEWER',
+                          readOnlyMessage: { value: "👁️ View Only — you have read-only access to this workspace." }
                       }} 
                   />
                 </div>
@@ -1132,6 +1154,13 @@ const Workspace = () => {
                 <form onSubmit={handleInviteCollaborator} className="flex flex-col gap-3 mb-6">
                     <div className="flex gap-2">
                         <input type="email" required placeholder="registered-dev@devsync.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className={`flex-1 text-sm px-3 py-2 border rounded focus:outline-none focus:border-blue-500 ${theme === 'dark' ? 'bg-gray-950 border-gray-700 text-white' : 'bg-gray-50'}`} />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                        <label className={`text-xs font-semibold whitespace-nowrap ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Invite as:</label>
+                        <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className={`flex-1 text-sm px-3 py-1.5 border rounded focus:outline-none focus:border-blue-500 ${theme === 'dark' ? 'bg-gray-950 border-gray-700 text-white' : 'bg-gray-50'}`}>
+                            <option value="COLLABORATOR">Collaborator (can edit)</option>
+                            <option value="VIEWER">Viewer (read-only)</option>
+                        </select>
                         <button type="submit" className="px-4 py-2 text-sm font-bold rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors">Invite</button>
                     </div>
                 </form>

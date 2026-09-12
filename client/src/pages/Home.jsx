@@ -44,49 +44,48 @@ const Home = () => {
             return;
         }
 
-        const fetchUserProfile = async () => {
-            if (!user?.email) {
-                try {
-                    const res = await axios.post(import.meta.env.VITE_BACKEND_URL + "/api/getuser", {}, { headers: { "auth-token": token } });
-                    setLocalUser(res.data);
-                } catch (err) { console.error("Identity fetch failed"); }
+        const loadDashboard = async () => {
+            // Fire ALL requests in parallel — don't wait for one to finish before starting next
+            const [profileRes, projectsRes, pingRes, invitesRes] = await Promise.allSettled([
+                // 1. User profile (only if not in Redux)
+                !user?.email
+                    ? axios.post(import.meta.env.VITE_BACKEND_URL + "/api/getuser", {}, { headers: { "auth-token": token } })
+                    : Promise.resolve(null),
+                // 2. Projects list
+                axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects", { headers: { "auth-token": token } }),
+                // 3. Network health check
+                axios.get(import.meta.env.VITE_BACKEND_URL + "/api/ping"),
+                // 4. Pending invitations
+                axios.get(import.meta.env.VITE_BACKEND_URL + "/api/invitations", { headers: { "auth-token": token } })
+            ]);
+
+            // Process results — each is independent, one failing shouldn't block others
+            if (profileRes.status === 'fulfilled' && profileRes.value?.data) {
+                setLocalUser(profileRes.value.data);
             }
+
+            if (projectsRes.status === 'fulfilled') {
+                const sorted = projectsRes.value.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                setProjects(sorted);
+            }
+
+            setNetworkStatus(pingRes.status === 'fulfilled' ? "Connection Secure" : "Server Offline");
+
+            if (invitesRes.status === 'fulfilled') {
+                setPendingInvites(invitesRes.value.data);
+            }
+
+            setIsLoading(false);
         };
 
-        const fetchProjects = async () => {
-            try {
-                const response = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/projects", { headers: { "auth-token": token } });
-                const sortedProjects = response.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                setProjects(sortedProjects);
-            } catch (error) {
-                console.error("Failed to synchronize workspace directory");
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        const checkNetworkHealth = async () => {
+        loadDashboard();
+        
+        const pingInterval = setInterval(async () => {
             try {
                 await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/ping");
                 setNetworkStatus("Connection Secure");
-            } catch (error) {
-                setNetworkStatus("Server Offline");
-            }
-        };
-
-        const fetchPendingInvites = async () => {
-            try {
-                const response = await axios.get(import.meta.env.VITE_BACKEND_URL + "/api/invitations", { headers: { "auth-token": token } });
-                setPendingInvites(response.data);
-            } catch (error) { console.error("Failed to fetch invitations"); }
-        };
-
-        fetchUserProfile();
-        fetchProjects();
-        checkNetworkHealth();
-        fetchPendingInvites();
-        
-        const pingInterval = setInterval(checkNetworkHealth, 30000);
+            } catch { setNetworkStatus("Server Offline"); }
+        }, 30000);
         return () => clearInterval(pingInterval);
     }, [token, navigate, user?.id, user?.email]);
 

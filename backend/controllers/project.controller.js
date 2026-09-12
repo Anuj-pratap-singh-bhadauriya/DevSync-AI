@@ -16,9 +16,8 @@ exports.list = async (req, res) => {
 
 exports.getById = async (req, res) => {
     try {
-        const workspace = await prisma.project.findUnique({ where: { id: req.params.id }, include: { members: { include: { user: { select: { id: true, name: true, email: true } } } } } });
-        if (!workspace) return res.status(404).json({ error: "Not found." });
-        res.json(workspace);
+        // req.project is already populated by checkMembership middleware with members + user details
+        res.json(req.project);
     } catch (error) { res.status(500).json({ error: "Server error." }); }
 };
 

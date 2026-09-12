@@ -7,8 +7,8 @@ exports.invite = async (req, res) => {
         if (!targetUser) return res.status(404).json({ error: "User not found. They must have a DevSync account first." });
         if (targetUser.id === req.user.userId) return res.status(400).json({ error: "You cannot invite yourself." });
 
-        // Only OWNER can invite as VIEWER; collaborators always invite as COLLABORATOR
-        const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+        // req.project is already populated by checkMembership middleware
+        const project = req.project;
         const isOwner = project.ownerId === req.user.userId;
         const inviteStatus = isOwner ? 'PENDING' : 'REQUESTED_BY_COLLAB';
 

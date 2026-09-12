@@ -11,7 +11,13 @@ const checkMembership = async (req, res, next) => {
 
         const project = await prisma.project.findUnique({
             where: { id: projectId },
-            include: { members: true }
+            include: {
+                members: {
+                    include: {
+                        user: { select: { id: true, name: true, email: true } }
+                    }
+                }
+            }
         });
 
         if (!project) {
@@ -25,8 +31,9 @@ const checkMembership = async (req, res, next) => {
             return res.status(403).json({ error: "Access denied. You are not a member of this workspace." });
         }
 
-        // Attach role to request for downstream use
+        // Attach role and project to request for downstream use — no re-fetch needed
         req.userRole = isOwner ? 'OWNER' : member.role;
+        req.project = project;
 
         next();
     } catch (error) {
